@@ -1,4 +1,5 @@
 import postgres from 'postgres';
+import { normalizeDbUrl } from './db-url';
 
 // Cliente Postgres compartido (Supabase vía pooler en modo transacción).
 // prepare:false es obligatorio con el pooler en modo transacción.
@@ -6,8 +7,10 @@ const globalForPg = globalThis as unknown as { __agenticsSeoPg?: postgres.Sql };
 
 export function pg(): postgres.Sql {
   if (globalForPg.__agenticsSeoPg) return globalForPg.__agenticsSeoPg;
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error('Falta DATABASE_URL: configura la conexión a Supabase Postgres.');
+  const { url, issues } = normalizeDbUrl(process.env.DATABASE_URL);
+  // Diagnóstico sin revelar la contraseña.
+  if (issues.length) console.warn(`DATABASE_URL: ${issues.join(' · ')}`);
+  if (!url) throw new Error(`DATABASE_URL no válida (${issues.join(', ')}).`);
   const sql = postgres(url, {
     prepare: false,
     max: Number(process.env.DATABASE_POOL_MAX || 3),
