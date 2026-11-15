@@ -7,7 +7,7 @@ export async function recordAudit(host: string, score: number) {
     await pg()`insert into seo_audit.audits (host, score) values (${host.slice(0, 253)}, ${score})`;
     cache = null;
   } catch (error) {
-    console.error('seo-audit counter', (error as { code?: string })?.code ?? error);
+    console.error('seo-audit counter', (error as { code?: string })?.code ?? (error instanceof Error ? error.message : error));
   }
 }
 
@@ -25,7 +25,7 @@ export async function auditCounts(): Promise<{ total: number; today: number } | 
     cache = { at: Date.now(), value: { total: row.total, today: row.today } };
     return cache.value;
   } catch (error) {
-    console.error('seo-audit counter', (error as { code?: string })?.code ?? error);
+    console.error('seo-audit counter', (error as { code?: string })?.code ?? (error instanceof Error ? error.message : error));
     return null;
   }
 }

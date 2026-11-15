@@ -64,3 +64,16 @@ void test('cobertura: más de 90 comprobaciones deterministas', () => {
   const total = runChecks(page).reduce((n, c) => n + c.checks.length, 0);
   assert.ok(total >= 88, `solo ${total} comprobaciones`);
 });
+
+void test('DATABASE_URL: tolera errores habituales al pegarla', async () => {
+  const { normalizeDbUrl } = await import('../db/db-url.ts');
+  const base = 'postgresql://postgres.abc:PASS@aws-0-eu-west-2.pooler.supabase.com:6543/postgres';
+  assert.equal(normalizeDbUrl(base).url, base);
+  assert.equal(normalizeDbUrl(`  DATABASE_URL="${base}" `).url, base);
+  const sym = normalizeDbUrl('postgresql://postgres.abc:p@ss#w/rd?1@aws-0-eu-west-2.pooler.supabase.com:6543/postgres');
+  assert.equal(sym.url, 'postgresql://postgres.abc:p%40ss%23w%2Frd%3F1@aws-0-eu-west-2.pooler.supabase.com:6543/postgres');
+  assert.equal(new URL(sym.url!).password, 'p%40ss%23w%2Frd%3F1');
+  assert.equal(normalizeDbUrl('postgresql://postgres.abc:[Secr3t]@h.pooler.supabase.com:6543/postgres').url, 'postgresql://postgres.abc:Secr3t@h.pooler.supabase.com:6543/postgres');
+  assert.equal(normalizeDbUrl('postgresql://postgres.abc:[YOUR-PASSWORD]@h:6543/postgres').url, null);
+  assert.equal(normalizeDbUrl('https://algo').url, null);
+});
