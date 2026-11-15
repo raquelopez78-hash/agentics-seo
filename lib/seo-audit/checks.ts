@@ -496,7 +496,7 @@ export function runChecks(p: PageData): AuditCategory[] {
     });
     const okLinks = links.filter((x) => x.ok).length;
     drop('trust_eeat', 'contact', 'legal', 'about', 'hsts');
-    upsert('trust_eeat', { id: 'trust_links', label: 'Contacto, sobre nosotros, aviso legal y privacidad', status: okLinks === 4 ? 'pass' : links[2].ok && links[3].ok ? 'warning' : 'fail', message: okLinks === 4 ? 'Los cuatro enlaces de confianza están presentes.' : `Sin encontrar: ${links.filter((x) => !x.ok).map((x) => x.label).join(', ')}.`, items: links, fix: 'Enlaza contacto y "sobre nosotros"; aviso legal y privacidad son obligatorios en la UE.', source: 'https://developers.google.com/search/docs/fundamentals/creating-helpful-content' });
+    upsert('trust_eeat', { id: 'trust_links', label: 'Contacto, sobre nosotros, aviso legal y privacidad', status: okLinks === 4 ? 'pass' : links[2].ok && links[3].ok ? 'warning' : 'fail', message: okLinks === 4 ? 'Los cuatro enlaces de confianza están presentes.' : `Sin encontrar: ${links.filter((x) => !x.ok).map((x) => x.label).join(', ')}. Comprobado solo en esta página: pueden estar enlazados desde otra sección.`, items: links, fix: 'Enlaza contacto y "sobre nosotros"; aviso legal y privacidad son obligatorios en la UE.', source: 'https://developers.google.com/search/docs/fundamentals/creating-helpful-content' });
     const csp = p.headers['content-security-policy'];
     const sec: CheckItem[] = [
       { label: 'Strict-Transport-Security', ok: !!p.headers['strict-transport-security'], value: p.headers['strict-transport-security'] },
