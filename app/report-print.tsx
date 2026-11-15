@@ -113,7 +113,7 @@ export default function ReportPrint({ report, preparedFor }: { report: AuditRepo
                 <tr key={k.id} data-status={k.status}>
                   <td><span>{ICON[k.status]}</span></td>
                   <td><b>{k.label}</b></td>
-                  <td>{k.message}{k.evidence && <code>{k.evidence}</code>}</td>
+                  <td>{k.message}{k.evidence && <code>{k.evidence}</code>}{k.items && k.items.length > 0 && <span className={r.items}>{k.items.map((it) => <em key={it.label} data-ok={String(it.ok)}>{it.ok === true ? '✓' : it.ok === false ? '✕' : '•'} {it.label}</em>)}</span>}</td>
                   <td>{k.status === 'fail' || k.status === 'warning' ? k.fix ?? '—' : '—'}</td>
                 </tr>
               ))}

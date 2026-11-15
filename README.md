@@ -3,7 +3,7 @@
 Lead magnet público: audita el SEO técnico y la visibilidad en asistentes de IA de cualquier URL. Next.js 16 en Vercel; Postgres (Supabase) y/o n8n para los leads.
 
 ## Qué evalúa
-90+ comprobaciones en 10 categorías ponderadas (0-100): rastreo e indexación, URL, on-page, contenido, Schema.org, Core Web Vitals (PageSpeed), móvil y accesibilidad, E-E-A-T, internacional y AI SEO/GEO (GPTBot, ClaudeBot, PerplexityBot, llms.txt…). Checks cualitativos con IA (Claude → GPT de respaldo) si hay clave.
+110+ comprobaciones en 10 categorías ponderadas (0-100): rastreo e indexación, URL, on-page, contenido, Schema.org, Core Web Vitals (PageSpeed), móvil y accesibilidad, E-E-A-T, internacional y AI SEO/GEO (GPTBot, ClaudeBot, PerplexityBot, llms.txt…). Checks cualitativos con IA (Claude → GPT de respaldo) si hay clave.
 
 ## Flujo
 1. El usuario introduce una URL → `POST /api/audit` (informe sin CWV) y `POST /api/audit/performance` (CWV).

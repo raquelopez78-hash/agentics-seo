@@ -7,6 +7,20 @@ import s from './audit.module.css';
 import ReportPrint from './report-print';
 
 const UNLOCK_KEY = 'agentics-seo-unlocked';
+const HISTORY_KEY = 'agentics-seo-history';
+type HistoryEntry = { score: number; date: string };
+function compareWithHistory(r: AuditReport): { previous: HistoryEntry | null } {
+  try {
+    const key = r.finalUrl.replace(/[#?].*$/, '');
+    const all = JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '{}') as Record<string, HistoryEntry>;
+    const previous = all[key] ?? null;
+    all[key] = { score: r.score, date: r.generatedAt };
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(all));
+    return { previous };
+  } catch {
+    return { previous: null };
+  }
+}
 const readUnlocked = () => { try { return sessionStorage.getItem(UNLOCK_KEY) === '1'; } catch { return false; } };
 
 const STEPS = ['Descargando la página', 'Leyendo robots.txt, sitemap y llms.txt', 'Analizando on-page y datos estructurados', 'Evaluando contenido y E-E-A-T', 'Calculando puntuación'];
@@ -31,6 +45,8 @@ export default function AuditClient() {
   const [report, setReport] = useState<AuditReport | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [unlocked, setUnlocked] = useState(false);
+  const [previous, setPrevious] = useState<HistoryEntry | null>(null);
+  const [copied, setCopied] = useState(false);
   const [lead, setLead] = useState({ name: '', email: '', company: '', privacy: false, marketing: false });
   const [leadState, setLeadState] = useState<{ sending: boolean; error: string }>({ sending: false, error: '' });
 
@@ -65,6 +81,7 @@ export default function AuditClient() {
       if (!res.ok) throw new Error(data.error ?? 'Error en la auditoría.');
       const r = data as AuditReport;
       setReport(r);
+      setPrevious(compareWithHistory(r).previous);
       setUnlocked(readUnlocked());
       setOpen(Object.fromEntries(r.categories.map((c) => [c.id, c.checks.some((k) => k.status === 'fail')])));
       void loadPerformance(r);
@@ -146,7 +163,10 @@ export default function AuditClient() {
 
       {report && (
         <section className={s.report}>
-          {!report.ai.enabled && <div className={s.notice}>Análisis con IA desactivado{report.ai.warning ? `: ${report.ai.warning}` : '. Configura ANTHROPIC_API_KEY para evaluar intención, E-E-A-T y citabilidad.'}</div>}
+          {!report.ai.enabled && (() => {
+            const n = report.categories.flatMap((c) => c.checks).filter((k) => k.status === 'no_api').length;
+            return <div className={s.notice}><b>Auditoría sin IA{n > 0 ? `: ${n} comprobaciones de contenido no evaluadas` : ''}.</b> La parte técnica está completa; faltan intención de búsqueda, profundidad, E-E-A-T y citabilidad. La puntuación solo incluye lo evaluado.{report.ai.warning ? ` (${report.ai.warning})` : ''}</div>;
+          })()}
 
           <div className={s.scoreHead}>
             <div className={s.ring}>
@@ -159,6 +179,24 @@ export default function AuditClient() {
             <div className={s.meta}>
               <p className={s.url}>{report.finalUrl}</p>
               <p>{report.summary}</p>
+              {previous && (() => {
+                const diff = Math.round((report.score - previous.score) * 10) / 10;
+                const when = new Date(previous.date).toLocaleDateString('es-ES');
+                return <p className={`${s.history} ${diff > 0 ? s.up : diff < 0 ? s.down : ''}`}>{diff > 0 ? `↑ +${diff} puntos` : diff < 0 ? `↓ ${diff} puntos` : '= Mismo resultado'} respecto a tu última auditoría ({Math.round(previous.score)}/100, {when})</p>;
+              })()}
+              <div className={s.share}>
+                <span>Compartir:</span>
+                {(() => {
+                  const msg = `Mi web ${new URL(report.finalUrl).hostname} ha sacado ${Math.round(report.score)}/100 en el Auditor SEO con IA de AGENTICS. Audita la tuya gratis:`;
+                  const link = typeof window === 'undefined' ? '' : window.location.origin;
+                  return <>
+                    <a href={`https://wa.me/?text=${encodeURIComponent(`${msg} ${link}`)}`} target="_blank" rel="noopener noreferrer">WhatsApp</a>
+                    <a href={`https://x.com/intent/post?text=${encodeURIComponent(msg)}&url=${encodeURIComponent(link)}`} target="_blank" rel="noopener noreferrer">X</a>
+                    <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(link)}`} target="_blank" rel="noopener noreferrer">LinkedIn</a>
+                    <button type="button" onClick={() => { void navigator.clipboard?.writeText(`${msg} ${link}`).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }); }}>{copied ? '¡Copiado!' : 'Copiar'}</button>
+                  </>;
+                })()}
+              </div>
               <p className={s.small}>{report.generatedAt ? new Date(report.generatedAt).toLocaleString('es-ES') : ''}{report.ai.engine ? ` · IA: ${report.ai.engine}` : ''}</p>
             </div>
             {unlocked && <div className={s.actions}>
@@ -172,6 +210,11 @@ export default function AuditClient() {
               <a key={c.id} href={`#cat-${c.id}`} onClick={() => setOpen((o) => ({ ...o, [c.id]: true }))}>
                 <span>{i + 1}. {c.name}</span>
                 <b style={{ color: color(c.score) }}>{c.score === null ? '—' : Math.round(c.score)}</b>
+                {(() => {
+                  const f = c.checks.filter((k) => k.status === 'fail').length;
+                  const w = c.checks.filter((k) => k.status === 'warning').length;
+                  return (f > 0 || w > 0) && <span className={s.badges}>{f > 0 && <em className={s.bFail} title={`${f} error(es)`}>{f}</em>}{w > 0 && <em className={s.bWarn} title={`${w} a mejorar`}>{w}</em>}</span>;
+                })()}
                 <i><em style={{ width: `${c.score ?? 0}%`, background: color(c.score) }} /></i>
               </a>
             ))}
@@ -221,6 +264,11 @@ export default function AuditClient() {
                     <div>
                       <p><b>{k.label}</b> — {k.message}</p>
                       {k.evidence && <code>{k.evidence}</code>}
+                      {k.items && k.items.length > 0 && (
+                        <ul className={s.items}>
+                          {k.items.map((it) => <li key={it.label} data-ok={String(it.ok)}><i>{it.ok === true ? '✓' : it.ok === false ? '✕' : '•'}</i><span><b>{it.label}</b>{it.value && <small>{it.value}</small>}</span></li>)}
+                        </ul>
+                      )}
                       {k.fix && (k.status === 'fail' || k.status === 'warning') && <p className={s.fix}>→ {k.fix}</p>}
                       {k.source && <a href={k.source} target="_blank" rel="noopener noreferrer">Fuente oficial ↗</a>}
                     </div>

@@ -36,7 +36,10 @@ void test('checks sobre una página de ejemplo', () => {
   assert.equal(find('img_alt').status, 'fail');
   assert.equal(find('schema_org').status, 'pass');
   assert.equal(find('bot_gptbot').status, 'pass');
-  assert.equal(find('legal').status, 'pass');
+  assert.equal(find('trust_links').items?.find((i) => i.label === 'Privacidad')?.ok, true);
+  assert.equal(find('trust_links').items?.find((i) => i.label === 'Contacto')?.ok, true);
+  assert.equal(find('freshness').status, 'na');
+  assert.equal(find('open_graph').items?.length, 5);
   assert.ok(report.score > 0 && report.score <= 100);
   assert.equal(report.categories.find((c) => c.id === 'international')!.score, null);
 });

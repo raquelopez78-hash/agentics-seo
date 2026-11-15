@@ -6,6 +6,8 @@ export type CategoryId =
   | 'crawling' | 'url_arch' | 'onpage' | 'content' | 'structured_data'
   | 'performance' | 'mobile_a11y' | 'trust_eeat' | 'international' | 'ai_geo';
 
+export type CheckItem = { label: string; ok: boolean | null; value?: string };
+
 export type AuditCheck = {
   id: string;
   label: string;
@@ -14,6 +16,7 @@ export type AuditCheck = {
   evidence?: string;
   fix?: string;
   source?: string;
+  items?: CheckItem[];
 };
 
 export type AuditCategory = { id: CategoryId; name: string; score: number | null; checks: AuditCheck[] };
@@ -106,6 +109,7 @@ export function reportToMarkdown(r: AuditReport): string {
     for (const k of c.checks) {
       lines.push(`- ${icon[k.status]} **${k.label}:** ${k.message}`);
       if (k.evidence) lines.push(`  - Evidencia: \`${k.evidence.replace(/`/g, "'")}\``);
+      for (const it of k.items ?? []) lines.push(`  - ${it.ok === true ? '✓' : it.ok === false ? '✕' : '·'} ${it.label}${it.value ? `: ${it.value}` : ''}`);
       if (k.fix && (k.status === 'fail' || k.status === 'warning')) lines.push(`  - Solución: ${k.fix}`);
     }
     lines.push('');

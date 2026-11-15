@@ -1,5 +1,5 @@
 // Comprobaciones deterministas de SEO clásico y AI SEO a partir de la página ya descargada. Módulo puro.
-import type { AuditCategory, AuditCheck, CategoryId, CheckStatus } from './scoring.ts';
+import type { AuditCategory, AuditCheck, CategoryId, CheckItem, CheckStatus } from './scoring.ts';
 import { CATEGORY_NAMES } from './scoring.ts';
 
 export type PageData = {
@@ -13,6 +13,12 @@ export type PageData = {
   robotsTxt: string | null;
   sitemapFound: boolean;
   llmsTxtFound: boolean;
+  /** Contenido del sitemap (urlset) para comprobar si incluye la URL. */
+  sitemapXml?: string | null;
+  /** Respuesta de la página a user-agents de bots de IA (detección de bloqueo por firewall/WAF). */
+  botResponses?: { bot: string; status: number | null }[];
+  /** Certificado TLS de la página. */
+  ssl?: { daysLeft: number; issuer: string } | null;
 };
 
 // ---------- utilidades HTML (sin dependencias) ----------
@@ -140,7 +146,7 @@ export function runChecks(p: PageData): AuditCategory[] {
   {
     const c = add('onpage');
     const title = inner(head, 'title')[0] ?? '';
-    c('title', 'Title', !title ? 'fail' : title.length >= 30 && title.length <= 65 ? 'pass' : 'warning', !title ? 'Falta la etiqueta <title>.' : `${title.length} caracteres (ideal 30–65).`, { evidence: title ? cut(title) : undefined, fix: 'Título único con la keyword principal al inicio.', source: 'https://developers.google.com/search/docs/appearance/title-link' });
+    c('title', 'Title', !title ? 'fail' : title.length >= 30 && title.length <= 60 ? 'pass' : 'warning', !title ? 'Falta la etiqueta <title>.' : `${title.length} caracteres (ideal 30–60; Google suele truncar a partir de ~60).`, { evidence: title ? cut(title) : undefined, fix: 'Título único con la keyword principal al inicio.', source: 'https://developers.google.com/search/docs/appearance/title-link' });
     const desc = meta(head, 'description') ?? '';
     c('meta_description', 'Meta description', !desc ? 'fail' : desc.length >= 70 && desc.length <= 160 ? 'pass' : 'warning', !desc ? 'Falta la meta description.' : `${desc.length} caracteres (ideal 70–160).`, { evidence: desc ? cut(desc) : undefined, fix: 'Resume la propuesta de valor con una llamada a la acción.', source: 'https://developers.google.com/search/docs/appearance/snippet' });
     const h1 = inner(html, 'h1');
@@ -361,6 +367,169 @@ export function runChecks(p: PageData): AuditCategory[] {
     c('citable_data', 'Datos citables', stats >= 3 ? 'pass' : stats ? 'warning' : 'fail', `${stats} cifra(s) concretas en el texto.`, { fix: 'Incluye datos, cifras y resultados verificables: los asistentes de IA citan hechos.' });
     c('entity_clarity', 'Entidad de marca clara', hasType('Organization', 'LocalBusiness', 'Person', 'Corporation') && /"name"/.test(JSON.stringify(parsedLd)) ? 'pass' : 'warning', 'La IA identifica mejor marcas declaradas con nombre, logo y perfiles.', { fix: 'Declara Organization con name, url, logo y sameAs.' });
   }
+
+
+  // ---------- Desgloses, contexto y comprobaciones avanzadas ----------
+  const upsert = (cat: CategoryId, check: AuditCheck) => {
+    const i = out[cat].findIndex((k) => k.id === check.id);
+    if (i >= 0) out[cat][i] = check; else out[cat].push(check);
+  };
+  const drop = (cat: CategoryId, ...ids: string[]) => { out[cat] = out[cat].filter((k) => !ids.includes(k.id)); };
+  const ldFlat = JSON.stringify(parsedLd);
+  const isArticle = hasType('Article', 'BlogPosting', 'NewsArticle') || (meta(head, 'og:type') ?? '').toLowerCase() === 'article' || !!meta(head, 'article:published_time');
+  const lower = html.toLowerCase();
+
+  // On-page: Open Graph y Twitter con desglose
+  {
+    const og: CheckItem[] = ['og:title', 'og:description', 'og:image', 'og:url', 'og:type'].map((k) => ({ label: k, ok: !!meta(head, k), value: meta(head, k) ?? undefined }));
+    const okOg = og.filter((x) => x.ok).length;
+    drop('onpage', 'og_url');
+    upsert('onpage', { id: 'open_graph', label: 'Open Graph', status: okOg === 5 ? 'pass' : okOg >= 3 ? 'warning' : 'fail', message: `${okOg} de 5 atributos presentes.`, items: og, fix: 'Completa og:title, og:description, og:image (1200×630), og:url y og:type.', source: 'https://ogp.me/' });
+    const tw: CheckItem[] = ['twitter:card', 'twitter:title', 'twitter:description', 'twitter:image'].map((k) => ({ label: k, ok: !!meta(head, k), value: meta(head, k) ?? undefined }));
+    const okTw = tw.filter((x) => x.ok).length;
+    upsert('onpage', { id: 'twitter_card', label: 'Twitter / X Cards', status: okTw === 4 ? 'pass' : tw[0].ok || okOg >= 3 ? 'warning' : 'fail', message: `${okTw} de 4 atributos presentes${okTw < 4 && okOg >= 3 ? ' (X usa Open Graph como respaldo)' : ''}.`, items: tw, fix: 'Añade twitter:card, twitter:title, twitter:description y twitter:image.', source: 'https://developer.x.com/en/docs/x-for-websites/cards/overview/markup' });
+    const levels = [...html.matchAll(/<h([1-6])\b/gi)].map((m) => Number(m[1]));
+    const h = out.onpage.find((k) => k.id === 'headings');
+    if (h && levels.length) h.evidence = `Secuencia: ${levels.slice(0, 30).map((l) => `H${l}`).join(' → ')}${levels.length > 30 ? ' …' : ''}`;
+    const subs = [...inner(html, 'h2'), ...inner(html, 'h3')];
+    const vague = subs.filter((x) => x.split(/\s+/).length < 2 || /^(inicio|home|m[aá]s|secci[oó]n|t[ií]tulo|bienvenid[oa]s?|servicios|contacto)$/i.test(x)).length;
+    upsert('onpage', { id: 'headings_descriptive', label: 'Encabezados descriptivos', status: !subs.length ? 'na' : vague / subs.length <= 0.3 ? 'pass' : 'warning', message: !subs.length ? 'Sin H2/H3.' : `${vague} de ${subs.length} subtítulos son de una palabra o genéricos.`, fix: 'Usa subtítulos que describan el contenido de la sección.', source: 'https://developers.google.com/search/docs/fundamentals/seo-starter-guide' });
+  }
+
+  // Rastreo
+  {
+    const refresh = /<meta[^>]+http-equiv=["']?refresh/i.test(head);
+    upsert('crawling', { id: 'meta_refresh', label: 'Sin meta refresh', status: refresh ? 'warning' : 'pass', message: refresh ? 'Usa <meta http-equiv="refresh"> (redirección obsoleta).' : 'No usa meta refresh.', fix: 'Sustituye la meta refresh por una redirección 301.', source: 'https://developer.mozilla.org/es/docs/Web/HTML/Element/meta#http-equiv' });
+    const xml = p.sitemapXml ?? null;
+    const norm = (s: string) => s.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
+    const inSitemap = !!xml && [...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].some((m) => norm(m[1]) === norm(p.finalUrl));
+    upsert('crawling', { id: 'sitemap_includes', label: 'URL incluida en el sitemap', status: !xml ? 'na' : /<sitemapindex/i.test(xml) ? 'na' : inSitemap ? 'pass' : 'warning', message: !xml ? 'No se pudo leer el sitemap.' : /<sitemapindex/i.test(xml) ? 'Índice de sitemaps: no se revisan los sitemaps hijos.' : inSitemap ? 'La URL aparece en el sitemap.' : 'La URL no aparece en el sitemap.', fix: 'Incluye todas las URLs indexables en el sitemap.', source: 'https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap' });
+    const assets = [...tags(html, 'script').map((s) => attr(s, 'src')), ...tags(html, 'link').filter((l) => /stylesheet/i.test(attr(l, 'rel') ?? '')).map((l) => attr(l, 'href'))]
+      .filter((x): x is string => !!x).map((x) => { try { return new URL(x, p.finalUrl); } catch { return null; } }).filter((x): x is URL => !!x && x.hostname === u.hostname);
+    const blocked = assets.filter((a) => !robotsAllows(p.robotsTxt, 'Googlebot', a.pathname));
+    upsert('crawling', { id: 'robots_assets', label: 'robots.txt no bloquea CSS/JS', status: !assets.length ? 'na' : blocked.length ? 'fail' : 'pass', message: !assets.length ? 'Sin CSS/JS propios enlazados.' : blocked.length ? `${blocked.length} de ${assets.length} recursos CSS/JS bloqueados para Googlebot.` : `Los ${assets.length} recursos CSS/JS son accesibles para Googlebot.`, evidence: blocked[0]?.pathname, fix: 'Permite el rastreo de CSS y JS: Google los necesita para renderizar.', source: 'https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics' });
+  }
+
+  // URL
+  {
+    const datesIds = /\/(19|20)\d{2}\/\d{1,2}\//.test(u.pathname) || /\d{6,}/.test(u.pathname);
+    upsert('url_arch', { id: 'url_dates_ids', label: 'Sin fechas ni IDs en la URL', status: datesIds ? 'warning' : 'pass', message: datesIds ? 'La ruta incluye fechas o IDs numéricos largos.' : 'Sin fechas ni IDs numéricos largos.', evidence: datesIds ? u.pathname : undefined, fix: 'URLs descriptivas y estables, sin fechas ni IDs.', source: 'https://developers.google.com/search/docs/crawling-indexing/url-structure' });
+  }
+
+  // Contenido
+  {
+    const tabs = (html.match(/<details\b/gi) ?? []).length + (html.match(/role=["']tab(panel)?["']/gi) ?? []).length + (html.match(/class=["'][^"']*\b(accordion|tab-pane|tabs?__panel)\b/gi) ?? []).length;
+    upsert('content', { id: 'tabs_accordions', label: 'Contenido en pestañas/acordeones', status: tabs >= 4 ? 'warning' : 'pass', message: tabs ? `${tabs} elemento(s) tipo acordeón/pestaña/details.${tabs >= 4 ? ' Evita que contenido esencial esté solo ahí.' : ''}` : 'El contenido principal está visible.', fix: 'Muestra lo esencial fuera de pestañas y acordeones.', source: 'https://developers.google.com/search/docs/fundamentals/creating-helpful-content' });
+    const imgs = tags(html, 'img').map((i) => attr(i, 'src') ?? '').filter(Boolean);
+    const generic = imgs.filter((s) => /(^|\/)(img|dsc|dcim|image|screenshot|captura|foto|photo|untitled|wp-image)[-_ ]?\d*\.(jpe?g|png|webp|gif|avif)/i.test(s.split('?')[0])).length;
+    upsert('content', { id: 'image_filenames', label: 'Nombres de archivo de imagen', status: !imgs.length ? 'na' : generic ? 'warning' : 'pass', message: !imgs.length ? 'Sin imágenes.' : `${generic} de ${imgs.length} imágenes con nombre genérico (IMG_1234.jpg…).`, fix: 'Nombra las imágenes con palabras que describan su contenido.', source: 'https://developers.google.com/search/docs/appearance/google-images' });
+    upsert('content', { id: 'text_vs_images', label: 'Texto no depende de imágenes', status: imgs.length >= 5 && words / imgs.length < 30 ? 'warning' : 'pass', message: imgs.length >= 5 && words / imgs.length < 30 ? `Poco texto (${words} palabras) para ${imgs.length} imágenes.` : 'Hay texto suficiente respecto a las imágenes.', source: 'https://developers.google.com/search/docs/appearance/google-images' });
+    // Legibilidad (Fernández Huerta, adaptación de Flesch al español): 206,84 − 0,60·P − 1,02·F
+    const sentences = Math.max(1, (text.match(/[.!?¡¿]+(\s|$)/g) ?? []).length);
+    const wordList = text.split(/\s+/).filter((w) => /\p{L}/u.test(w));
+    const syllables = wordList.reduce((s, w) => s + Math.max(1, (w.toLowerCase().match(/[aeiouáéíóúü]+/g) ?? []).length), 0);
+    const n = wordList.length;
+    const fh = n >= 100 ? Math.round((206.84 - 0.6 * (syllables / n) * 100 - 1.02 * (sentences / n) * 100) * 10) / 10 : null;
+    upsert('content', { id: 'readability', label: 'Legibilidad del texto', status: fh === null ? 'na' : fh >= 60 ? 'pass' : fh >= 40 ? 'warning' : 'fail', message: fh === null ? 'Texto insuficiente para estimarla.' : `Índice Fernández Huerta estimado: ${fh}/100 (${fh >= 70 ? 'fácil' : fh >= 60 ? 'normal' : fh >= 40 ? 'algo difícil' : 'difícil'}).`, evidence: fh === null ? undefined : `palabras/frase: ${(n / sentences).toFixed(1)} · sílabas/100 palabras: ${((syllables / n) * 100).toFixed(1)}`, fix: 'Frases más cortas y palabras más sencillas.', source: 'https://es.wikipedia.org/wiki/Legibilidad' });
+    const author = !!meta(head, 'author') || /"author"/.test(ldFlat) || /rel=["']author["']/i.test(html);
+    upsert('content', { id: 'author', label: 'Autor identificado', status: !isArticle ? 'na' : author ? 'pass' : 'warning', message: !isArticle ? 'No es un artículo: la autoría individual no suele aplicar.' : author ? 'Autor identificado.' : 'Artículo sin autor identificado.', fix: 'Muestra el autor con enlace a su perfil y márcalo en Schema.', source: 'https://developers.google.com/search/docs/fundamentals/creating-helpful-content' });
+    const f = out.content.find((k) => k.id === 'freshness');
+    if (f && !isArticle && f.status !== 'pass') { f.status = 'na'; f.message = 'No es un artículo: la fecha de publicación no suele ser necesaria.'; }
+  }
+
+  // Datos estructurados
+  {
+    const contentTypes = [...ldTypes].filter((x) => !['WebSite', 'WebPage', 'Organization', 'Person', 'BreadcrumbList', 'ImageObject', 'ListItem', 'SearchAction', 'EntryPoint', 'PostalAddress', 'ContactPoint', 'Thing', 'Question', 'Answer', 'Offer', 'Place'].includes(x));
+    upsert('structured_data', { id: 'schema_types', label: 'Tipos de contenido marcados', status: contentTypes.length ? 'pass' : jsonLd.length ? 'warning' : 'fail', message: contentTypes.length ? `${contentTypes.length} tipo(s) de contenido detectado(s).` : 'Solo hay marcado de identidad, no del contenido de la página.', items: contentTypes.slice(0, 8).map((x) => ({ label: x, ok: true })), fix: 'Marca el tipo de contenido: Service, Product, Article, FAQPage, LocalBusiness…', source: 'https://schema.org/docs/full.html' });
+    upsert('structured_data', { id: 'about_mentions', label: 'Entidades (about/mentions)', status: !jsonLd.length ? 'na' : /"(about|mentions)"/.test(ldFlat) ? 'pass' : 'warning', message: /"(about|mentions)"/.test(ldFlat) ? 'Usa about/mentions para aclarar de qué trata la página.' : 'No usa about/mentions: refuerzan el tema ante buscadores y motores de IA.', source: 'https://schema.org/about' });
+    const hasVideo = /<video\b/i.test(html) || /<iframe[^>]+(youtube|vimeo|dailymotion)/i.test(html);
+    upsert('structured_data', { id: 'video_schema', label: 'Vídeo marcado (VideoObject)', status: !hasVideo ? 'na' : hasType('VideoObject') ? 'pass' : 'warning', message: !hasVideo ? 'Sin vídeo embebido.' : hasType('VideoObject') ? 'Vídeo con VideoObject.' : 'Hay vídeo sin VideoObject.', source: 'https://developers.google.com/search/docs/appearance/structured-data/video' });
+    const reviewsVisible = /rese[ñn]as?|testimonios?|opiniones|valoraci[oó]n|reviews?|★/i.test(text);
+    upsert('structured_data', { id: 'reviews_schema', label: 'Reseñas marcadas', status: hasType('Review', 'AggregateRating') ? 'pass' : reviewsVisible ? 'warning' : 'na', message: hasType('Review', 'AggregateRating') ? 'Reseñas marcadas con Review/AggregateRating.' : reviewsVisible ? 'Se mencionan reseñas o testimonios sin marcado.' : 'Sin reseñas en la página.', source: 'https://developers.google.com/search/docs/appearance/structured-data/review-snippet' });
+    const a = out.structured_data.find((k) => k.id === 'schema_article');
+    if (a && !isArticle) { a.status = 'na'; a.message = 'No es un artículo.'; }
+  }
+
+  // Rendimiento
+  {
+    const imgs = tags(html, 'img');
+    const offscreen = imgs.slice(3);
+    const noLazy = offscreen.filter((i) => !/loading=["']?lazy/i.test(i) && !/data-src|lazyload/i.test(i));
+    upsert('performance', { id: 'lazy_images', label: 'Carga diferida fuera del viewport', status: !offscreen.length ? 'na' : noLazy.length ? 'warning' : 'pass', message: !offscreen.length ? 'Pocas imágenes: no aplica.' : noLazy.length ? `${noLazy.length} de ${offscreen.length} imágenes (a partir de la 4.ª) sin loading="lazy".` : 'Las imágenes inferiores usan carga diferida.', items: noLazy.slice(0, 4).map((i) => ({ label: (attr(i, 'src') ?? '').split('/').pop()?.split('?')[0] ?? 'imagen', ok: false })), fix: 'Añade loading="lazy" a las imágenes que no se ven al cargar.', source: 'https://web.dev/articles/browser-level-image-lazy-loading' });
+    const origins = new Set([...tags(html, 'script').map((s) => attr(s, 'src')), ...tags(html, 'link').filter((l) => /stylesheet/i.test(attr(l, 'rel') ?? '')).map((l) => attr(l, 'href')), ...tags(html, 'iframe').map((s) => attr(s, 'src'))]
+      .filter((x): x is string => !!x).map((x) => { try { return new URL(x, p.finalUrl).origin; } catch { return ''; } }).filter((o) => o && !o.includes(u.hostname)));
+    const hints = tags(head, 'link').filter((l) => /preconnect|dns-prefetch/i.test(attr(l, 'rel') ?? '')).length;
+    upsert('performance', { id: 'preconnect', label: 'Preconnect a terceros', status: !origins.size ? 'na' : hints ? 'pass' : 'warning', message: !origins.size ? 'No carga recursos de terceros.' : hints ? `${hints} preconnect/dns-prefetch para ${origins.size} origen(es) externos.` : `${origins.size} origen(es) externos sin preconnect.`, source: 'https://web.dev/articles/uses-rel-preconnect' });
+    const iframes = tags(html, 'iframe');
+    upsert('performance', { id: 'lazy_iframes', label: 'Carga diferida de vídeos/iframes', status: !iframes.length ? 'na' : iframes.every((i) => /loading=["']?lazy/i.test(i)) ? 'pass' : 'warning', message: !iframes.length ? 'Sin iframes.' : `${iframes.filter((i) => /loading=["']?lazy/i.test(i)).length} de ${iframes.length} iframes con loading="lazy".`, source: 'https://web.dev/articles/iframe-lazy-loading' });
+  }
+
+  // Móvil y accesibilidad
+  {
+    const skip = /<a\b[^>]+href=["']#[^"']+["'][^>]*>\s*(saltar|ir al contenido|skip)/i.test(html.slice(0, 20000));
+    upsert('mobile_a11y', { id: 'skip_link', label: 'Enlace "saltar al contenido"', status: skip ? 'pass' : 'warning', message: skip ? 'Tiene enlace para saltar la navegación.' : 'Sin enlace "saltar al contenido" al inicio.', fix: 'Añade un enlace oculto visible al foco que lleve a <main>.', source: 'https://www.w3.org/WAI/WCAG21/Techniques/general/G1' });
+    const tabPos = (html.match(/tabindex=["']?[1-9]/gi) ?? []).length;
+    upsert('mobile_a11y', { id: 'tabindex', label: 'Sin tabindex positivo', status: tabPos ? 'warning' : 'pass', message: tabPos ? `${tabPos} elemento(s) con tabindex positivo.` : 'El orden de tabulación es el natural.', source: 'https://web.dev/articles/control-focus-with-tabindex' });
+    const ifr = tags(html, 'iframe');
+    upsert('mobile_a11y', { id: 'iframe_title', label: 'Iframes con título', status: !ifr.length ? 'na' : ifr.every((i) => attr(i, 'title')) ? 'pass' : 'warning', message: !ifr.length ? 'Sin iframes.' : `${ifr.filter((i) => attr(i, 'title')).length} de ${ifr.length} iframes con title.`, source: 'https://www.w3.org/WAI/WCAG21/Techniques/html/H64' });
+    const tables = html.match(/<table\b[\s\S]*?<\/table>/gi) ?? [];
+    const dataTables = tables.filter((tb) => (tb.match(/<tr\b/gi) ?? []).length >= 2);
+    upsert('mobile_a11y', { id: 'table_headers', label: 'Tablas con cabeceras', status: !dataTables.length ? 'na' : dataTables.every((tb) => /<th\b/i.test(tb)) ? 'pass' : 'warning', message: !dataTables.length ? 'Sin tablas de datos.' : `${dataTables.filter((tb) => /<th\b/i.test(tb)).length} de ${dataTables.length} tablas con <th>.`, source: 'https://webaim.org/techniques/tables/data' });
+    const sem: CheckItem[] = ['main', 'nav', 'header', 'footer', 'article'].map((t) => ({ label: t, ok: new RegExp(`<${t}\\b`, 'i').test(html) }));
+    const okSem = sem.slice(0, 4).filter((x) => x.ok).length;
+    upsert('mobile_a11y', { id: 'landmarks', label: 'Etiquetas HTML semánticas', status: okSem === 4 ? 'pass' : okSem >= 2 ? 'warning' : 'fail', message: `${sem.filter((x) => x.ok).length} de 5 etiquetas semánticas presentes.`, items: sem, fix: 'Usa header, nav, main, article y footer.', source: 'https://developer.mozilla.org/es/docs/Glossary/Semantics' });
+  }
+
+  // Confianza: desgloses y SSL
+  {
+    const anchors = (html.match(/<a\b[\s\S]*?<\/a>/gi) ?? []).map((a) => ({ href: (attr(a, 'href') ?? '').toLowerCase(), text: stripTags(a).toLowerCase() }));
+    const findLink = (hrefRe: RegExp, textRe: RegExp) => anchors.find((a) => hrefRe.test(a.href) || textRe.test(a.text));
+    const linkDefs: [string, RegExp, RegExp][] = [
+      ['Contacto', /contact|^mailto:|^tel:/, /^(contacto|contacta|cont[aá]ctanos|contact( us)?)$/],
+      ['Sobre nosotros', /about|nosotros|quienes-somos|qui%c3%a9nes|sobre-|equipo|team/, /^(sobre nosotros|qui[eé]nes somos|nuestro equipo|equipo|about( us)?|la empresa)$/],
+      ['Aviso legal', /aviso-legal|legal|terminos|t%c3%a9rminos|terms|condiciones/, /aviso legal|t[eé]rminos|condiciones de uso|terms/],
+      ['Privacidad', /privac/, /privacidad|privacy/],
+    ];
+    const links: CheckItem[] = linkDefs.map(([label, hrefRe, textRe]) => {
+      const hit = findLink(hrefRe, textRe);
+      return { label, ok: !!hit, value: hit ? (hit.href.startsWith('#') ? `Sección en la página (${hit.href})` : 'Enlazado') : 'No encontrado' };
+    });
+    const okLinks = links.filter((x) => x.ok).length;
+    drop('trust_eeat', 'contact', 'legal', 'about', 'hsts');
+    upsert('trust_eeat', { id: 'trust_links', label: 'Contacto, sobre nosotros, aviso legal y privacidad', status: okLinks === 4 ? 'pass' : links[2].ok && links[3].ok ? 'warning' : 'fail', message: okLinks === 4 ? 'Los cuatro enlaces de confianza están presentes.' : `Sin encontrar: ${links.filter((x) => !x.ok).map((x) => x.label).join(', ')}.`, items: links, fix: 'Enlaza contacto y "sobre nosotros"; aviso legal y privacidad son obligatorios en la UE.', source: 'https://developers.google.com/search/docs/fundamentals/creating-helpful-content' });
+    const csp = p.headers['content-security-policy'];
+    const sec: CheckItem[] = [
+      { label: 'Strict-Transport-Security', ok: !!p.headers['strict-transport-security'], value: p.headers['strict-transport-security'] },
+      { label: 'X-Content-Type-Options', ok: !!p.headers['x-content-type-options'], value: p.headers['x-content-type-options'] },
+      { label: 'X-Frame-Options', ok: !!p.headers['x-frame-options'] || /frame-ancestors/i.test(csp ?? ''), value: p.headers['x-frame-options'] ?? (/frame-ancestors/i.test(csp ?? '') ? 'vía CSP frame-ancestors' : undefined) },
+      { label: 'Content-Security-Policy', ok: !!csp, value: csp ? cut(csp, 60) : undefined },
+    ];
+    const okSec = sec.filter((x) => x.ok).length;
+    upsert('trust_eeat', { id: 'security_headers', label: 'Cabeceras de seguridad HTTP', status: okSec >= 3 ? 'pass' : okSec === 2 ? 'warning' : 'fail', message: `${okSec} de 4 cabeceras de seguridad presentes.${okSec < 4 ? ` Faltan: ${sec.filter((x) => !x.ok).map((x) => x.label).join(', ')}.` : ''}`, items: sec, fix: 'Configura HSTS, X-Content-Type-Options, X-Frame-Options y CSP en el servidor.', source: 'https://web.dev/articles/security-headers' });
+    const phone = /tel:|"telephone"|(\+34|0034)?\s?[6789]\d{2}[\s.-]?\d{3}[\s.-]?\d{3}/.test(html);
+    const address = /<address\b|"streetAddress"|"address"|\b(calle|c\/|avda\.?|avenida|plaza|paseo)\s+[A-ZÁÉÍÓÚ]/i.test(html);
+    const nif = /\b([A-HJ-NP-SUVW]-?\d{7}-?[0-9A-J]|\d{8}-?[A-Z]|ES[A-Z0-9]\d{7}[A-Z0-9])\b/.test(text);
+    const nap: CheckItem[] = [{ label: 'Teléfono', ok: phone, value: phone ? 'Detectado' : 'No detectado' }, { label: 'Dirección', ok: address, value: address ? 'Detectada' : 'No detectada' }, { label: 'NIF / CIF / VAT', ok: nif, value: nif ? 'Detectado' : 'No detectado' }];
+    const okNap = nap.filter((x) => x.ok).length;
+    upsert('trust_eeat', { id: 'nap', label: 'Datos de empresa verificables', status: okNap >= 2 ? 'pass' : okNap === 1 ? 'warning' : 'warning', message: `${okNap} de 3 datos de empresa detectados en el texto o en Schema (detección aproximada).`, items: nap, fix: 'Muestra teléfono, dirección y NIF/CIF (obligatorio por la LSSI en España).', source: 'https://developers.google.com/search/docs/fundamentals/creating-helpful-content' });
+    const ssl = p.ssl;
+    upsert('trust_eeat', { id: 'ssl_expiry', label: 'Caducidad del certificado SSL', status: u.protocol !== 'https:' || !ssl ? 'na' : ssl.daysLeft > 30 ? 'pass' : ssl.daysLeft > 7 ? 'warning' : 'fail', message: u.protocol !== 'https:' ? 'La página no usa HTTPS.' : !ssl ? 'No se pudo leer el certificado.' : `Válido ${ssl.daysLeft} día(s) más (emisor: ${ssl.issuer || 'desconocido'}).`, fix: 'Renueva el certificado o activa la renovación automática.', source: 'https://developers.google.com/search/docs/crawling-indexing/https' });
+  }
+
+  // Internacional
+  {
+    const ogLocale = meta(head, 'og:locale');
+    const lang = (attr(tags(html, 'html')[0] ?? '', 'lang') ?? '').toLowerCase();
+    upsert('international', { id: 'og_locale', label: 'og:locale coherente con lang', status: !ogLocale || !lang ? 'na' : ogLocale.toLowerCase().slice(0, 2) === lang.slice(0, 2) ? 'pass' : 'warning', message: !ogLocale ? 'No declara og:locale.' : !lang ? 'Sin atributo lang.' : `og:locale="${ogLocale}" · lang="${lang}".` });
+  }
+
+  // AI SEO: bloqueo por firewall/WAF
+  {
+    const br = p.botResponses ?? [];
+    const blockedBots = br.filter((b) => b.status !== null && [401, 403, 406, 429, 503].includes(b.status) && p.status < 400);
+    upsert('ai_geo', { id: 'ai_waf', label: 'Sin bloqueo de bots de IA por firewall', status: !br.length ? 'na' : blockedBots.length ? 'warning' : 'pass', message: !br.length ? 'No se pudo comprobar.' : blockedBots.length ? `El servidor rechaza a ${blockedBots.map((b) => b.bot).join(', ')} aunque robots.txt lo permita.` : 'El servidor responde igual a los bots de IA probados.', items: br.map((b) => ({ label: b.bot, ok: b.status !== null && b.status < 400, value: b.status === null ? 'sin respuesta' : `HTTP ${b.status}` })), fix: 'Revisa reglas de Cloudflare/WAF que bloqueen GPTBot, ClaudeBot o PerplexityBot.' });
+  }
+  void lower;
 
   return (Object.keys(out) as CategoryId[]).map((id) => ({ id, name: CATEGORY_NAMES[id], score: null, checks: out[id] }));
 }

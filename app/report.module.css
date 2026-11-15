@@ -44,10 +44,10 @@
   .dist li b { margin-left: auto; padding-left: 14px; }
   .findings { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; }
   .findings li { display: flex; gap: 9px; padding: 5px 0; border-bottom: 1px solid #f1f5f9; break-inside: avoid; }
-  .findings li > span, .detail td span { flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 9pt; font-weight: 800; color: #fff; background: #16a34a; }
-  .findings li[data-status='warning'] > span, .detail tr[data-status='warning'] td span { background: #f59e0b; }
-  .findings li[data-status='fail'] > span, .detail tr[data-status='fail'] td span { background: #dc2626; }
-  .detail tr[data-status='na'] td span, .detail tr[data-status='no_api'] td span, .detail tr[data-status='pending'] td span { background: #cbd5e1; }
+  .findings li > span, .detail td:first-child > span { flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 9pt; font-weight: 800; color: #fff; background: #16a34a; }
+  .findings li[data-status='warning'] > span, .detail tr[data-status='warning'] td:first-child > span { background: #f59e0b; }
+  .findings li[data-status='fail'] > span, .detail tr[data-status='fail'] td:first-child > span { background: #dc2626; }
+  .detail tr[data-status='na'] td:first-child > span, .detail tr[data-status='no_api'] td:first-child > span, .detail tr[data-status='pending'] td:first-child > span { background: #cbd5e1; }
   .findings b { font-size: 9.5pt; }
   .findings p { font-size: 8.5pt; margin-top: 1px !important; }
   .detail { break-inside: auto; margin-bottom: 14px; }
@@ -61,4 +61,10 @@
   .detail tr { break-inside: avoid; }
   .detail code { display: block; font-size: 7.5pt; color: #64748b; word-break: break-all; margin-top: 2px; }
   .foot { margin-top: 16px; padding-top: 8px; border-top: 1px solid #e2e8f0; font-size: 7.5pt; color: #94a3b8; }
+}
+@media print {
+  .items { display: flex; flex-wrap: wrap; gap: 3px 8px; margin-top: 3px; }
+  .items em { font-style: normal; font-size: 7.5pt; color: #64748b; }
+  .items em[data-ok='true'] { color: #16a34a; }
+  .items em[data-ok='false'] { color: #dc2626; }
 }
