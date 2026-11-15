@@ -52,9 +52,9 @@ export async function POST(request: Request) {
     try {
       const sql = pg();
       await sql`insert into seo_audit.leads
-        (id, name, email, company, audited_url, score, grade, fails, warnings, top_issues, marketing_consent, privacy_version, webhook_status)
+        (id, name, email, company, audited_url, score, grade, fails, warnings, top_issues, marketing_consent, privacy_version, webhook_status, report_url)
         values (${id}, ${lead.name}, ${lead.email}, ${lead.company}, ${lead.auditedUrl}, ${lead.score}, ${lead.grade}, ${lead.fails}, ${lead.warnings},
-        ${sql.json(lead.topIssues)}, ${lead.marketing}, ${LEAD_PRIVACY_VERSION}, ${webhook})`;
+        ${sql.json(lead.topIssues)}, ${lead.marketing}, ${LEAD_PRIVACY_VERSION}, ${webhook}, ${shareUrl ?? ''})`;
       stored = true;
     } catch (error) {
       console.error('seo-audit lead', (error as { code?: string })?.code ?? error);

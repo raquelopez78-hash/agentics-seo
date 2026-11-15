@@ -1,0 +1,253 @@
+{
+  "name": "Auditoría SEO · Leads (Supabase → Airtable + Gmail) · cada 5 min",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "b2f0c6d2-0001-4b6e-9a01-000000000001",
+      "name": "Cada 5 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update seo_audit.leads l set webhook_status = 'processing', claimed_at = now()\nwhere l.id in (\n  select id from seo_audit.leads\n  where webhook_status in ('skipped', 'failed')\n     or (webhook_status = 'processing' and claimed_at < now() - interval '30 minutes')\n  order by created_at\n  limit 20\n  for update skip locked\n)\nreturning l.id, l.created_at, l.name, l.email, l.company, l.audited_url, l.score, l.grade,\n          l.fails, l.warnings, l.top_issues, l.marketing_consent, l.report_url;",
+        "options": {}
+      },
+      "id": "b2f0c6d2-0002-4b6e-9a01-000000000002",
+      "name": "Supabase · Leads nuevos",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        220,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "",
+          "name": "Supabase · seo_app"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Mapea cada lead de Supabase a las columnas de Airtable (mismos nombres que el workflow por webhook).\nconst b = $json;\nconst issues = Array.isArray(b.top_issues) ? b.top_issues : (typeof b.top_issues === 'string' ? JSON.parse(b.top_issues || '[]') : []);\nreturn {\n  json: {\n    'ID': b.id,\n    'Fecha': new Date(b.created_at).toISOString(),\n    'Nombre': b.name,\n    'Email': b.email,\n    'Empresa': b.company || '',\n    'URL auditada': b.audited_url,\n    'Puntuación': b.score === null ? null : Number(b.score),\n    'Nota': b.grade,\n    'Errores': Number(b.fails),\n    'Mejoras': Number(b.warnings),\n    'Problemas principales': issues.map(i => `• ${i.label} (${i.category}): ${i.message}`).join('\\n'),\n    'Consentimiento marketing': !!b.marketing_consent,\n    'Informe online': b.report_url || '',\n  },\n};"
+      },
+      "id": "b2f0c6d2-0003-4b6e-9a01-000000000003",
+      "name": "Campos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: $input.item.json }];",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "b2f0c6d2-0004-4b6e-9a01-000000000004",
+      "name": "Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "appXXXXXXXXXXXXXX"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "tblXXXXXXXXXXXXXX"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "a1f0c6d2-0005-4b6e-9a01-000000000005",
+      "name": "Airtable · Crear lead",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Campos').item.json.Email }}",
+        "subject": "=Tu auditoría SEO de {{ $('Campos').item.json['URL auditada'].replace(/^https?:\\/\\//,'').replace(/\\/$/,'') }}: {{ $('Campos').item.json['Puntuación'] }}/100",
+        "emailType": "html",
+        "message": "=<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#0f172a\"><p style=\"font-size:13px;letter-spacing:2px;font-weight:bold;color:#2563eb\">◆ AGENTICS · AUDITORÍA SEO</p><h1 style=\"font-size:24px;margin:8px 0\">Hola {{ $('Campos').item.json.Nombre }}, aquí tienes tu auditoría</h1><p>Hemos analizado <b>{{ $('Campos').item.json['URL auditada'] }}</b>:</p><p style=\"font-size:40px;font-weight:bold;margin:8px 0;color:#1d4ed8\">{{ $('Campos').item.json['Puntuación'] }}/100 <span style=\"font-size:18px;color:#64748b\">({{ $('Campos').item.json.Nota }})</span></p><p>{{ $('Campos').item.json.Errores }} problema(s) crítico(s) y {{ $('Campos').item.json.Mejoras }} aspecto(s) a mejorar.</p>{{ $('Campos').item.json['Problemas principales'] ? '<h2 style=\"font-size:17px;margin-top:22px\">Lo más urgente</h2><p style=\"line-height:1.6\">' + $('Campos').item.json['Problemas principales'].replace(/\\n/g, '<br>') + '</p>' : '' }}{{ $('Campos').item.json['Informe online'] ? '<p style=\"margin:22px 0 8px\"><a href=\"' + $('Campos').item.json['Informe online'] + '\" style=\"display:inline-block;padding:12px 20px;border-radius:8px;background:#0f172a;color:#fff;text-decoration:none;font-weight:bold\">Ver mi informe completo</a></p><p style=\"font-size:13px;color:#64748b\">Puedes reenviar este enlace a tu equipo o a tu programador. Desde ahí también se descarga en PDF.</p>' : '<p style=\"margin-top:22px\">Puedes volver a lanzar la auditoría y descargar el informe completo en PDF cuando quieras: <a href=\"https://auditoria.agenticsprojects.com\" style=\"color:#2563eb\">auditoria.agenticsprojects.com</a></p>' }}<div style=\"margin:28px 0;padding:20px;border-radius:12px;background:#eef2ff\"><p style=\"margin:0 0 12px;font-weight:bold\">¿Quieres que lo arreglemos por ti?</p><p style=\"margin:0 0 16px\">Revisamos contigo el informe en una llamada de 20 minutos y te decimos qué priorizar. Sin compromiso.</p><a href=\"https://www.agenticsprojects.com/#contacto\" style=\"display:inline-block;padding:12px 20px;border-radius:8px;background:#2563eb;color:#fff;text-decoration:none;font-weight:bold\">Reservar diagnóstico gratuito</a></div><p style=\"font-size:12px;color:#64748b\">Recibes este email porque solicitaste la auditoría en auditoria.agenticsprojects.com. Responsable: Agentics Projects. Si no quieres más comunicaciones, responde con \"BAJA\".</p></div>",
+        "options": {
+          "appendAttribution": false,
+          "senderName": "Agentics Projects",
+          "replyTo": "agenticsprojects@gmail.com"
+        }
+      },
+      "id": "a1f0c6d2-0008-4b6e-9a01-000000000008",
+      "name": "Gmail · Informe al lead",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1100,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "sendTo": "agenticsprojects@gmail.com",
+        "subject": "=🔔 Lead auditoría SEO: {{ $('Campos').item.json.Nombre }} · {{ $('Campos').item.json['Puntuación'] }}/100",
+        "emailType": "html",
+        "message": "=<p><b>Nuevo lead de la auditoría SEO</b></p><ul><li>Nombre: {{ $('Campos').item.json.Nombre }}</li><li>Email: {{ $('Campos').item.json.Email }}</li><li>Empresa: {{ $('Campos').item.json.Empresa || '—' }}</li><li>Web: {{ $('Campos').item.json['URL auditada'] }}</li><li>Nota: {{ $('Campos').item.json['Puntuación'] }}/100 ({{ $('Campos').item.json.Nota }}) · {{ $('Campos').item.json.Errores }} críticos · {{ $('Campos').item.json.Mejoras }} a mejorar</li><li>Acepta comunicaciones comerciales: {{ $('Campos').item.json['Consentimiento marketing'] ? 'Sí' : 'No' }}</li><li>Informe: {{ $('Campos').item.json['Informe online'] || '—' }}</li></ul><p>{{ ($('Campos').item.json['Problemas principales'] || '').replace(/\\n/g, '<br>') }}</p>",
+        "options": {
+          "appendAttribution": false,
+          "senderName": "Auditoría SEO"
+        }
+      },
+      "id": "a1f0c6d2-0009-4b6e-9a01-000000000009",
+      "name": "Gmail · Aviso interno",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1320,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update seo_audit.leads set webhook_status = 'sent' where id = $1;",
+        "options": {
+          "queryReplacement": "={{ $('Campos').item.json.ID }}"
+        }
+      },
+      "id": "b2f0c6d2-0009-4b6e-9a01-000000000009",
+      "name": "Supabase · Marcar enviado",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1540,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "",
+          "name": "Supabase · seo_app"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Cada 5 minutos": {
+      "main": [
+        [
+          {
+            "node": "Supabase · Leads nuevos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase · Leads nuevos": {
+      "main": [
+        [
+          {
+            "node": "Campos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Campos": {
+      "main": [
+        [
+          {
+            "node": "Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead": {
+      "main": [
+        [
+          {
+            "node": "Airtable · Crear lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable · Crear lead": {
+      "main": [
+        [
+          {
+            "node": "Gmail · Informe al lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail · Informe al lead": {
+      "main": [
+        [
+          {
+            "node": "Gmail · Aviso interno",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail · Aviso interno": {
+      "main": [
+        [
+          {
+            "node": "Supabase · Marcar enviado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
