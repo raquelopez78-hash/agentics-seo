@@ -36,7 +36,10 @@ void test('checks sobre una página de ejemplo', () => {
   assert.equal(find('img_alt').status, 'fail');
   assert.equal(find('schema_org').status, 'pass');
   assert.equal(find('bot_gptbot').status, 'pass');
-  assert.equal(find('legal').status, 'pass');
+  assert.equal(find('trust_links').items?.find((i) => i.label === 'Privacidad')?.ok, true);
+  assert.equal(find('trust_links').items?.find((i) => i.label === 'Contacto')?.ok, true);
+  assert.equal(find('freshness').status, 'na');
+  assert.equal(find('open_graph').items?.length, 5);
   assert.ok(report.score > 0 && report.score <= 100);
   assert.equal(report.categories.find((c) => c.id === 'international')!.score, null);
 });
@@ -54,4 +57,10 @@ void test('lead: valida, normaliza y resume el informe', async () => {
   assert.equal(lead.topIssues[0].category, 'On-page');
   assert.throws(() => parseLead({ name: 'Ana', email: 'mal', privacy: true, report }), LeadInputError);
   assert.throws(() => parseLead({ name: 'Ana', email: 'a@b.com', privacy: false, report }), LeadInputError);
+});
+
+void test('cobertura: más de 90 comprobaciones deterministas', () => {
+  const page: PageData = { url: 'https://ej.com/', finalUrl: 'https://ej.com/', status: 200, headers: {}, html: '<!doctype html><html><head><title>x</title></head><body><p>hola</p></body></html>', redirects: 0, ttfbMs: 100, robotsTxt: null, sitemapFound: false, llmsTxtFound: false };
+  const total = runChecks(page).reduce((n, c) => n + c.checks.length, 0);
+  assert.ok(total >= 88, `solo ${total} comprobaciones`);
 });

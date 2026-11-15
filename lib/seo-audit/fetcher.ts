@@ -1,6 +1,7 @@
 // Descarga segura de la página auditada: solo http(s) público, redirecciones verificadas una a una, límites de tiempo y tamaño.
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
+import { connect } from 'node:tls';
 import type { PageData } from './checks.ts';
 
 const UA = 'Mozilla/5.0 (compatible; AgenticsSEOAudit/1.0)';
@@ -81,6 +82,33 @@ async function fetchText(url: URL, timeoutMs = 6000): Promise<{ status: number; 
   }
 }
 
+/** Estado HTTP que devuelve la página a un user-agent concreto (sin leer el cuerpo). */
+async function statusFor(url: URL, userAgent: string): Promise<number | null> {
+  try {
+    await assertPublic(url);
+    const res = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(6000), headers: { 'user-agent': userAgent, accept: 'text/html' } });
+    await res.body?.cancel();
+    return res.status;
+  } catch {
+    return null;
+  }
+}
+
+/** Días hasta la caducidad del certificado TLS y su emisor. */
+function readCertificate(host: string): Promise<{ daysLeft: number; issuer: string } | null> {
+  return new Promise((resolve) => {
+    const socket = connect({ host, port: 443, servername: host, timeout: 5000 }, () => {
+      const cert = socket.getPeerCertificate();
+      socket.end();
+      if (!cert?.valid_to) return resolve(null);
+      const issuer = Array.isArray(cert.issuer?.O) ? cert.issuer.O[0] : (cert.issuer?.O ?? cert.issuer?.CN ?? '');
+      resolve({ daysLeft: Math.floor((new Date(cert.valid_to).getTime() - Date.now()) / 86_400_000), issuer: String(issuer) });
+    });
+    socket.on('error', () => resolve(null));
+    socket.on('timeout', () => { socket.destroy(); resolve(null); });
+  });
+}
+
 export async function fetchPage(input: string): Promise<PageData> {
   const url = normalizeUrl(input);
   let page;
@@ -98,12 +126,25 @@ export async function fetchPage(input: string): Promise<PageData> {
   res.headers.forEach((v, k) => { headers[k.toLowerCase()] = v; });
 
   const origin = finalUrl.origin;
-  const [robots, llms] = await Promise.all([fetchText(new URL('/robots.txt', origin)), fetchText(new URL('/llms.txt', origin))]);
+  const BOTS: [string, string][] = [
+    ['GPTBot', 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; GPTBot/1.2; +https://openai.com/gptbot'],
+    ['ClaudeBot', 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; ClaudeBot/1.0; +claudebot@anthropic.com)'],
+    ['PerplexityBot', 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; PerplexityBot/1.0; +https://perplexity.ai/perplexitybot)'],
+  ];
+  const [robots, llms, ssl, ...botStatuses] = await Promise.all([
+    fetchText(new URL('/robots.txt', origin)),
+    fetchText(new URL('/llms.txt', origin)),
+    finalUrl.protocol === 'https:' ? readCertificate(finalUrl.hostname) : Promise.resolve(null),
+    ...BOTS.map(([, ua]) => statusFor(finalUrl, ua)),
+  ]);
   const robotsTxt = robots && robots.status === 200 && !/<html/i.test(robots.text.slice(0, 500)) ? robots.text : null;
-  let sitemapFound = !!robotsTxt && /^\s*sitemap\s*:/im.test(robotsTxt);
-  if (!sitemapFound) {
-    const sm = await fetchText(new URL('/sitemap.xml', origin));
-    sitemapFound = !!sm && sm.status === 200 && /<(urlset|sitemapindex)/i.test(sm.text);
+  const declared = robotsTxt?.match(/^\s*sitemap\s*:\s*(\S+)/im)?.[1];
+  let sitemapXml: string | null = null;
+  for (const candidate of [declared, new URL('/sitemap.xml', origin).toString()].filter((x): x is string => !!x)) {
+    try {
+      const sm = await fetchText(new URL(candidate, origin));
+      if (sm && sm.status === 200 && /<(urlset|sitemapindex)/i.test(sm.text)) { sitemapXml = sm.text; break; }
+    } catch { /* URL de sitemap inválida */ }
   }
   return {
     url: url.toString(),
@@ -114,7 +155,10 @@ export async function fetchPage(input: string): Promise<PageData> {
     redirects,
     ttfbMs,
     robotsTxt,
-    sitemapFound,
+    sitemapFound: !!declared || !!sitemapXml,
+    sitemapXml,
+    botResponses: BOTS.map(([bot], i) => ({ bot, status: botStatuses[i] as number | null })),
+    ssl: ssl as { daysLeft: number; issuer: string } | null,
     llmsTxtFound: !!llms && llms.status === 200 && llms.text.length > 20 && !/<html/i.test(llms.text.slice(0, 500)),
   };
 }

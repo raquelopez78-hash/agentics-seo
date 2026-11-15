@@ -1,11 +1,27 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { finalizeReport, reportToMarkdown, type AuditCheck, type AuditReport, type CheckStatus } from '@/lib/seo-audit/scoring';
+import { CATEGORY_NAMES, finalizeReport, reportToMarkdown, type AuditCheck, type AuditReport, type CheckStatus } from '@/lib/seo-audit/scoring';
 import { LEAD_PRIVACY_NOTICE } from '@/lib/seo-audit/lead';
 import s from './audit.module.css';
+import ReportPrint from './report-print';
+import { AGENCY_CONTACT_URL, AGENCY_URL, LEGAL_LINKS } from '@/lib/site';
 
 const UNLOCK_KEY = 'agentics-seo-unlocked';
+const HISTORY_KEY = 'agentics-seo-history';
+type HistoryEntry = { score: number; date: string };
+function compareWithHistory(r: AuditReport): { previous: HistoryEntry | null } {
+  try {
+    const key = r.finalUrl.replace(/[#?].*$/, '');
+    const all = JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '{}') as Record<string, HistoryEntry>;
+    const previous = all[key] ?? null;
+    all[key] = { score: r.score, date: r.generatedAt };
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(all));
+    return { previous };
+  } catch {
+    return { previous: null };
+  }
+}
 const readUnlocked = () => { try { return sessionStorage.getItem(UNLOCK_KEY) === '1'; } catch { return false; } };
 
 const STEPS = ['Descargando la página', 'Leyendo robots.txt, sitemap y llms.txt', 'Analizando on-page y datos estructurados', 'Evaluando contenido y E-E-A-T', 'Calculando puntuación'];
@@ -30,6 +46,16 @@ export default function AuditClient() {
   const [report, setReport] = useState<AuditReport | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [unlocked, setUnlocked] = useState(false);
+  const [previous, setPrevious] = useState<HistoryEntry | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [counts, setCounts] = useState<{ total: number; today: number } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/audit/count').then((r) => r.json()).then((d: { total: number | null; today: number | null }) => {
+      if (typeof d.total === 'number' && d.total > 0) setCounts({ total: d.total, today: d.today ?? 0 });
+    }).catch(() => {});
+  }, [report]);
   const [lead, setLead] = useState({ name: '', email: '', company: '', privacy: false, marketing: false });
   const [leadState, setLeadState] = useState<{ sending: boolean; error: string }>({ sending: false, error: '' });
 
@@ -38,11 +64,12 @@ export default function AuditClient() {
     if (!report) return;
     setLeadState({ sending: true, error: '' });
     try {
-      const res = await fetch('/api/audit/lead', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...lead, report }) });
+      const res = await fetch('/api/audit/lead', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...lead, reportId: report.id, report }) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? 'No se pudo enviar.');
       try { sessionStorage.setItem(UNLOCK_KEY, '1'); } catch { /* sin almacenamiento */ }
       setUnlocked(true);
+      if (typeof data.shareUrl === 'string') setShareUrl(data.shareUrl);
       setLeadState({ sending: false, error: '' });
     } catch (err) {
       setLeadState({ sending: false, error: err instanceof Error ? err.message : 'No se pudo enviar.' });
@@ -57,13 +84,14 @@ export default function AuditClient() {
 
   async function run(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
-    setLoading(true); setError(''); setReport(null); setStep(0);
+    setLoading(true); setError(''); setReport(null); setStep(0); setShareUrl(null);
     try {
       const res = await fetch('/api/audit', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Error en la auditoría.');
       const r = data as AuditReport;
       setReport(r);
+      setPrevious(compareWithHistory(r).previous);
       setUnlocked(readUnlocked());
       setOpen(Object.fromEntries(r.categories.map((c) => [c.id, c.checks.some((k) => k.status === 'fail')])));
       void loadPerformance(r);
@@ -77,7 +105,7 @@ export default function AuditClient() {
   async function loadPerformance(base: AuditReport) {
     let checks: AuditCheck[];
     try {
-      const res = await fetch('/api/audit/performance', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: base.finalUrl }) });
+      const res = await fetch('/api/audit/performance', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: base.finalUrl, reportId: base.id }) });
       const data = await res.json();
       checks = res.ok ? data.checks : [{ id: 'cwv', label: 'Core Web Vitals (PageSpeed)', status: 'na', message: data.error ?? 'No disponible.' }];
     } catch {
@@ -96,21 +124,44 @@ export default function AuditClient() {
     return { fails: flat.filter((k) => k.status === 'fail'), warns: flat.filter((k) => k.status === 'warning') };
   }, [report]);
 
+  function printPdf(r: AuditReport) {
+    const previous = document.title;
+    document.title = `Informe-SEO-${new URL(r.finalUrl).hostname}`;
+    const restore = () => { document.title = previous; window.removeEventListener('afterprint', restore); };
+    window.addEventListener('afterprint', restore);
+    window.print();
+  }
+
   const toggleAll = (value: boolean) => report && setOpen(Object.fromEntries(report.categories.map((c) => [c.id, value])));
 
   return (
+    <>
     <div className={s.page}>
       <header className={s.hero}>
-        <div className={s.brand}><span className={s.brandMark}>◆</span>AGENTICS <span>SEO AUDIT</span></div>
-        <h1>Audita el <em>SEO técnico</em> y tu visibilidad en <em>asistentes de IA</em>.</h1>
-        <p className={s.lead}>Rastreo, on-page, Schema.org, Core Web Vitals, accesibilidad, E-E-A-T y acceso de GPTBot, ClaudeBot o PerplexityBot. Cada punto con su fuente oficial.</p>
+        <a className={s.brand} href={AGENCY_URL}><span className={s.brandMark}>◆</span>AGENTICS <span>SEO AUDIT</span></a>
+        <h1>Auditor <em>SEO</em> con <em>IA</em></h1>
+        <p className={s.lead}>Introduce la URL de cualquier web y obtén en segundos un análisis de más de 90 aspectos SEO: errores, oportunidades de mejora y recomendaciones para ganar visibilidad en Google y en buscadores con IA como ChatGPT, Perplexity o Gemini. Descarga el informe profesional en PDF.</p>
         <form className={s.form} onSubmit={run}>
           <label htmlFor="audit-url" className={s.sr}>URL a auditar</label>
           <input id="audit-url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://tuweb.com/pagina" required disabled={loading} />
-          <button type="submit" disabled={loading}>{loading ? 'Auditando…' : 'Auditar'}</button>
+          <button type="submit" disabled={loading}>{loading ? 'Analizando…' : 'Analizar mi web'}</button>
         </form>
+        {counts && <p className={s.counter}>Ya se han realizado <b>{counts.total.toLocaleString('es-ES')}</b> auditorías{counts.today > 0 ? <> · hoy, <b>{counts.today.toLocaleString('es-ES')}</b></> : null}.</p>}
         <p className={s.disclaimer}>Revisión técnica automatizada. No sustituye una estrategia SEO profesional.</p>
       </header>
+
+      {!report && !loading && (
+        <section className={s.features} aria-label="Qué incluye">
+          <div className={s.featureGrid}>
+            <div><b>90+</b><h3>Aspectos analizados</h3><p>Rastreo, on-page, contenido, Schema.org, Core Web Vitals, accesibilidad, E-E-A-T y seguridad.</p></div>
+            <div><b>IA</b><h3>Google y buscadores con IA</h3><p>Comprueba si ChatGPT, Claude, Perplexity, Gemini o Copilot pueden leerte y citarte.</p></div>
+            <div><b>PDF</b><h3>Informe profesional</h3><p>Resumen, puntuación por área, hallazgos y recomendaciones, listo para compartir con tu equipo o clientes.</p></div>
+          </div>
+          <ul className={s.areas}>
+            {Object.values(CATEGORY_NAMES).map((n, i) => <li key={n}><span>{i + 1}</span>{n}</li>)}
+          </ul>
+        </section>
+      )}
 
       {loading && (
         <output className={s.status} aria-live="polite">
@@ -123,7 +174,10 @@ export default function AuditClient() {
 
       {report && (
         <section className={s.report}>
-          {!report.ai.enabled && <div className={s.notice}>Análisis con IA desactivado{report.ai.warning ? `: ${report.ai.warning}` : '. Configura ANTHROPIC_API_KEY para evaluar intención, E-E-A-T y citabilidad.'}</div>}
+          {!report.ai.enabled && (() => {
+            const n = report.categories.flatMap((c) => c.checks).filter((k) => k.status === 'no_api').length;
+            return <div className={s.notice}><b>Auditoría sin IA{n > 0 ? `: ${n} comprobaciones de contenido no evaluadas` : ''}.</b> La parte técnica está completa; faltan intención de búsqueda, profundidad, E-E-A-T y citabilidad. La puntuación solo incluye lo evaluado.{report.ai.warning ? ` (${report.ai.warning})` : ''}</div>;
+          })()}
 
           <div className={s.scoreHead}>
             <div className={s.ring}>
@@ -136,10 +190,29 @@ export default function AuditClient() {
             <div className={s.meta}>
               <p className={s.url}>{report.finalUrl}</p>
               <p>{report.summary}</p>
+              {previous && (() => {
+                const diff = Math.round((report.score - previous.score) * 10) / 10;
+                const when = new Date(previous.date).toLocaleDateString('es-ES');
+                return <p className={`${s.history} ${diff > 0 ? s.up : diff < 0 ? s.down : ''}`}>{diff > 0 ? `↑ +${diff} puntos` : diff < 0 ? `↓ ${diff} puntos` : '= Mismo resultado'} respecto a tu última auditoría ({Math.round(previous.score)}/100, {when})</p>;
+              })()}
+              {shareUrl && <p className={s.shareLink}>Enlace a este informe: <a href={shareUrl} target="_blank" rel="noopener noreferrer">{shareUrl.replace(/^https?:\/\//, '')}</a></p>}
+              <div className={s.share}>
+                <span>Compartir:</span>
+                {(() => {
+                  const msg = shareUrl ? `Informe SEO + AI SEO de ${new URL(report.finalUrl).hostname}: ${Math.round(report.score)}/100.` : `Mi web ${new URL(report.finalUrl).hostname} ha sacado ${Math.round(report.score)}/100 en el Auditor SEO con IA de AGENTICS. Audita la tuya gratis:`;
+                  const link = shareUrl ?? (typeof window === 'undefined' ? '' : window.location.origin);
+                  return <>
+                    <a href={`https://wa.me/?text=${encodeURIComponent(`${msg} ${link}`)}`} target="_blank" rel="noopener noreferrer">WhatsApp</a>
+                    <a href={`https://x.com/intent/post?text=${encodeURIComponent(msg)}&url=${encodeURIComponent(link)}`} target="_blank" rel="noopener noreferrer">X</a>
+                    <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(link)}`} target="_blank" rel="noopener noreferrer">LinkedIn</a>
+                    <button type="button" onClick={() => { void navigator.clipboard?.writeText(`${msg} ${link}`).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }); }}>{copied ? '¡Copiado!' : 'Copiar'}</button>
+                  </>;
+                })()}
+              </div>
               <p className={s.small}>{report.generatedAt ? new Date(report.generatedAt).toLocaleString('es-ES') : ''}{report.ai.engine ? ` · IA: ${report.ai.engine}` : ''}</p>
             </div>
             {unlocked && <div className={s.actions}>
-              <button type="button" onClick={() => { toggleAll(true); setTimeout(() => window.print(), 50); }}>Descargar PDF</button>
+              <button type="button" onClick={() => printPdf(report)}>Descargar informe PDF</button>
               <button type="button" onClick={() => download(`auditoria-seo-${new URL(report.finalUrl).hostname}.md`, reportToMarkdown(report), 'text/markdown')}>Descargar .md</button>
             </div>}
           </div>
@@ -149,6 +222,11 @@ export default function AuditClient() {
               <a key={c.id} href={`#cat-${c.id}`} onClick={() => setOpen((o) => ({ ...o, [c.id]: true }))}>
                 <span>{i + 1}. {c.name}</span>
                 <b style={{ color: color(c.score) }}>{c.score === null ? '—' : Math.round(c.score)}</b>
+                {(() => {
+                  const f = c.checks.filter((k) => k.status === 'fail').length;
+                  const w = c.checks.filter((k) => k.status === 'warning').length;
+                  return (f > 0 || w > 0) && <span className={s.badges}>{f > 0 && <em className={s.bFail} title={`${f} error(es)`}>{f}</em>}{w > 0 && <em className={s.bWarn} title={`${w} a mejorar`}>{w}</em>}</span>;
+                })()}
                 <i><em style={{ width: `${c.score ?? 0}%`, background: color(c.score) }} /></i>
               </a>
             ))}
@@ -165,7 +243,7 @@ export default function AuditClient() {
           {!unlocked && (
             <form className={s.gate} onSubmit={submitLead}>
               <h2>Desbloquea el informe completo</h2>
-              <p>Detalle de las {report.categories.reduce((n, c) => n + c.checks.length, 0)} comprobaciones, cómo solucionar cada punto y descarga en PDF y Markdown.</p>
+              <p>Detalle de los {report.categories.reduce((n, c) => n + c.checks.length, 0)} aspectos analizados, cómo solucionar cada punto e informe profesional en PDF listo para compartir.</p>
               <div className={s.gateRow}>
                 <label>Nombre<input required minLength={2} maxLength={120} autoComplete="name" value={lead.name} onChange={(e) => setLead({ ...lead, name: e.target.value })} /></label>
                 <label>Email<input required type="email" maxLength={254} autoComplete="email" value={lead.email} onChange={(e) => setLead({ ...lead, email: e.target.value })} /></label>
@@ -198,6 +276,11 @@ export default function AuditClient() {
                     <div>
                       <p><b>{k.label}</b> — {k.message}</p>
                       {k.evidence && <code>{k.evidence}</code>}
+                      {k.items && k.items.length > 0 && (
+                        <ul className={s.items}>
+                          {k.items.map((it) => <li key={it.label} data-ok={String(it.ok)}><i>{it.ok === true ? '✓' : it.ok === false ? '✕' : '•'}</i><span><b>{it.label}</b>{it.value && <small>{it.value}</small>}</span></li>)}
+                        </ul>
+                      )}
                       {k.fix && (k.status === 'fail' || k.status === 'warning') && <p className={s.fix}>→ {k.fix}</p>}
                       {k.source && <a href={k.source} target="_blank" rel="noopener noreferrer">Fuente oficial ↗</a>}
                     </div>
@@ -207,9 +290,22 @@ export default function AuditClient() {
             </div>
           ))}
           </>}
-          <p className={s.footer}>Informe generado por AGENTICS · Auditoría SEO + AI SEO</p>
+          <div className={s.cta}>
+            <div>
+              <h2>¿Lo arreglamos por ti?</h2>
+              <p>En Agentics Projects corregimos estos puntos, optimizamos tu web para Google y buscadores con IA y automatizamos tu captación.</p>
+            </div>
+            <a href={AGENCY_CONTACT_URL}>Reservar diagnóstico gratuito</a>
+          </div>
         </section>
       )}
     </div>
+    <footer className={s.siteFooter}>
+      <a href={AGENCY_URL}>◆ Agentics Projects</a>
+      <span>Agentes de IA, automatización y marketing digital</span>
+      <nav aria-label="Legal">{LEGAL_LINKS.map((l) => <a key={l.href} href={l.href}>{l.label}</a>)}</nav>
+    </footer>
+    {report && unlocked && <ReportPrint report={report} preparedFor={lead.company || lead.name || undefined} />}
+    </>
   );
 }
