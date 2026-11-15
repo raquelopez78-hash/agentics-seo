@@ -1,7 +1,7 @@
 # n8n · Leads de la auditoría → Airtable + Gmail
 
 1. **Airtable:** crea una tabla `Leads auditoría SEO` con estas columnas (tipo sugerido):
-   `ID` (texto) · `Fecha` (texto o fecha ISO) · `Nombre` · `Email` (email) · `Empresa` · `URL auditada` (URL) · `Puntuación` (número, 1 decimal) · `Nota` · `Errores` (número) · `Mejoras` (número) · `Problemas principales` (texto largo) · `Consentimiento marketing` (casilla).
+   `ID` (texto) · `Fecha` (texto o fecha ISO) · `Nombre` · `Email` (email) · `Empresa` · `URL auditada` (URL) · `Puntuación` (número, 1 decimal) · `Nota` · `Errores` (número) · `Mejoras` (número) · `Problemas principales` (texto largo) · `Consentimiento marketing` (casilla) · `Informe online` (URL).
 2. **n8n:** Workflows → Import from file → `seo-audit-leads.json`.
 3. En el nodo **Airtable · Crear lead**: asigna tu credencial y sustituye `appXXXX…` (base) y `tblXXXX…` (tabla).
 4. En **Validar y mapear**: cambia `CAMBIA_ESTE_SECRETO` por un valor largo y aleatorio.

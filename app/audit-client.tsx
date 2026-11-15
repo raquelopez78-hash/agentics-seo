@@ -48,6 +48,7 @@ export default function AuditClient() {
   const [unlocked, setUnlocked] = useState(false);
   const [previous, setPrevious] = useState<HistoryEntry | null>(null);
   const [copied, setCopied] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [counts, setCounts] = useState<{ total: number; today: number } | null>(null);
 
   useEffect(() => {
@@ -63,11 +64,12 @@ export default function AuditClient() {
     if (!report) return;
     setLeadState({ sending: true, error: '' });
     try {
-      const res = await fetch('/api/audit/lead', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...lead, report }) });
+      const res = await fetch('/api/audit/lead', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...lead, reportId: report.id, report }) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? 'No se pudo enviar.');
       try { sessionStorage.setItem(UNLOCK_KEY, '1'); } catch { /* sin almacenamiento */ }
       setUnlocked(true);
+      if (typeof data.shareUrl === 'string') setShareUrl(data.shareUrl);
       setLeadState({ sending: false, error: '' });
     } catch (err) {
       setLeadState({ sending: false, error: err instanceof Error ? err.message : 'No se pudo enviar.' });
@@ -82,7 +84,7 @@ export default function AuditClient() {
 
   async function run(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
-    setLoading(true); setError(''); setReport(null); setStep(0);
+    setLoading(true); setError(''); setReport(null); setStep(0); setShareUrl(null);
     try {
       const res = await fetch('/api/audit', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url }) });
       const data = await res.json();
@@ -103,7 +105,7 @@ export default function AuditClient() {
   async function loadPerformance(base: AuditReport) {
     let checks: AuditCheck[];
     try {
-      const res = await fetch('/api/audit/performance', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: base.finalUrl }) });
+      const res = await fetch('/api/audit/performance', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: base.finalUrl, reportId: base.id }) });
       const data = await res.json();
       checks = res.ok ? data.checks : [{ id: 'cwv', label: 'Core Web Vitals (PageSpeed)', status: 'na', message: data.error ?? 'No disponible.' }];
     } catch {
@@ -193,11 +195,12 @@ export default function AuditClient() {
                 const when = new Date(previous.date).toLocaleDateString('es-ES');
                 return <p className={`${s.history} ${diff > 0 ? s.up : diff < 0 ? s.down : ''}`}>{diff > 0 ? `↑ +${diff} puntos` : diff < 0 ? `↓ ${diff} puntos` : '= Mismo resultado'} respecto a tu última auditoría ({Math.round(previous.score)}/100, {when})</p>;
               })()}
+              {shareUrl && <p className={s.shareLink}>Enlace a este informe: <a href={shareUrl} target="_blank" rel="noopener noreferrer">{shareUrl.replace(/^https?:\/\//, '')}</a></p>}
               <div className={s.share}>
                 <span>Compartir:</span>
                 {(() => {
-                  const msg = `Mi web ${new URL(report.finalUrl).hostname} ha sacado ${Math.round(report.score)}/100 en el Auditor SEO con IA de AGENTICS. Audita la tuya gratis:`;
-                  const link = typeof window === 'undefined' ? '' : window.location.origin;
+                  const msg = shareUrl ? `Informe SEO + AI SEO de ${new URL(report.finalUrl).hostname}: ${Math.round(report.score)}/100.` : `Mi web ${new URL(report.finalUrl).hostname} ha sacado ${Math.round(report.score)}/100 en el Auditor SEO con IA de AGENTICS. Audita la tuya gratis:`;
+                  const link = shareUrl ?? (typeof window === 'undefined' ? '' : window.location.origin);
                   return <>
                     <a href={`https://wa.me/?text=${encodeURIComponent(`${msg} ${link}`)}`} target="_blank" rel="noopener noreferrer">WhatsApp</a>
                     <a href={`https://x.com/intent/post?text=${encodeURIComponent(msg)}&url=${encodeURIComponent(link)}`} target="_blank" rel="noopener noreferrer">X</a>

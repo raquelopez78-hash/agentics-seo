@@ -1,6 +1,7 @@
 import { analyzeWithAi } from '@/lib/seo-audit/ai';
 import { pageBasics, runChecks } from '@/lib/seo-audit/checks';
 import { recordAudit } from '@/lib/seo-audit/counter';
+import { saveReport } from '@/lib/seo-audit/reports';
 import { AuditInputError, fetchPage } from '@/lib/seo-audit/fetcher';
 import { clientIp, rateLimited } from '@/lib/seo-audit/rate-limit';
 import { finalizeReport } from '@/lib/seo-audit/scoring';
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
       categories,
     });
     await recordAudit(new URL(report.finalUrl).hostname, report.score);
+    report.id = await saveReport(report);
     return json(report);
   } catch (error) {
     if (error instanceof AuditInputError) return json({ error: error.message }, 400);

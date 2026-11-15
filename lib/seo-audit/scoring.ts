@@ -22,6 +22,8 @@ export type AuditCheck = {
 export type AuditCategory = { id: CategoryId; name: string; score: number | null; checks: AuditCheck[] };
 
 export type AuditReport = {
+  /** Identificador del informe guardado (solo con base de datos). */
+  id?: string;
   url: string;
   finalUrl: string;
   generatedAt: string;

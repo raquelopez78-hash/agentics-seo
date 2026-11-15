@@ -14,6 +14,7 @@ Lead magnet público: audita el SEO técnico y la visibilidad en asistentes de I
 - `lib/seo-audit/`: `fetcher.ts` (descarga con protección SSRF), `checks.ts`, `scoring.ts`, `ai.ts`, `pagespeed.ts`, `lead.ts`, `rate-limit.ts`.
 - `app/`: página (`page.tsx`, `audit-client.tsx`) y API (`api/audit/*`).
 - `supabase/migrations/`: `0001` tabla `seo_audit.leads` (leads) · `0002` tabla `seo_audit.audits` (contador público: solo dominio y nota).
+- Informes compartibles: cada auditoría se guarda en `seo_audit.reports` (migración `0003`) y obtiene `/r/<id>`, que solo se sirve tras captar el lead. El informe publicado es siempre el del servidor (el navegador no puede falsear la nota). `noindex, follow` e imagen OG con dominio y nota.
 - Contador: `GET /api/audit/count` → `{ total, today }` (hoy en hora de Madrid, caché 60 s). Sin `DATABASE_URL` no se muestra.
 
 ## Dominio: auditoria.agenticsprojects.com
