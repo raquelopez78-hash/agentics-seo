@@ -249,5 +249,118 @@ export function runChecks(p: PageData): AuditCategory[] {
     c('ssr', 'Contenido en el HTML inicial', ssr ? 'pass' : 'fail', ssr ? 'El texto está en el HTML servido.' : 'Casi no hay texto en el HTML: muchos bots de IA no ejecutan JavaScript.', { fix: 'Usa SSR/SSG para que el contenido esté en el HTML.' });
   }
 
+
+  // ---------- Comprobaciones ampliadas ----------
+  {
+    const c = add('crawling');
+    const robotsMeta = (meta(html, 'robots') ?? '').toLowerCase();
+    c('nofollow_meta', 'Meta nofollow', /nofollow|none/.test(robotsMeta) ? 'warning' : 'pass', /nofollow|none/.test(robotsMeta) ? 'La página pide no seguir sus enlaces.' : 'Los enlaces se pueden seguir.', { fix: 'Quita nofollow de la meta robots salvo que sea intencionado.' });
+    const canonicalTag = tags(head, 'link').find((l) => (attr(l, 'rel') ?? '').toLowerCase() === 'canonical');
+    const canonical = canonicalTag ? attr(canonicalTag, 'href') : null;
+    c('canonical_absolute', 'Canonical absoluto', !canonical ? 'na' : /^https?:\/\//i.test(canonical) ? 'pass' : 'warning', !canonical ? 'Sin canonical.' : /^https?:\/\//i.test(canonical) ? 'URL canónica absoluta.' : 'Canonical relativo: Google recomienda URL absoluta.', { evidence: canonical ?? undefined });
+    const sitemapInRobots = !!p.robotsTxt && /^\s*sitemap\s*:/im.test(p.robotsTxt);
+    c('robots_sitemap', 'Sitemap en robots.txt', p.robotsTxt === null ? 'na' : sitemapInRobots ? 'pass' : 'warning', sitemapInRobots ? 'robots.txt declara el sitemap.' : 'robots.txt no declara el sitemap.', { fix: 'Añade "Sitemap: https://tudominio/sitemap.xml" a robots.txt.' });
+    const title = inner(head, 'title')[0] ?? '';
+    const soft404 = /\b404\b|not found|no encontrad|página no existe/i.test(title + ' ' + (inner(html, 'h1')[0] ?? ''));
+    c('soft_404', 'Soft 404', soft404 && p.status === 200 ? 'fail' : 'pass', soft404 && p.status === 200 ? 'Parece una página de error que responde 200.' : 'No hay indicios de soft 404.', { fix: 'Las páginas inexistentes deben responder 404 o 410.' });
+  }
+  {
+    const c = add('url_arch');
+    const depth = u.pathname.split('/').filter(Boolean).length;
+    c('url_depth', 'Profundidad de URL', depth <= 3 ? 'pass' : depth <= 5 ? 'warning' : 'fail', `${depth} nivel(es) de carpeta.`, { fix: 'Mantén las páginas importantes a ≤ 3 niveles de la raíz.' });
+    const nonAscii = /%[0-9a-f]{2}|[^\x20-\x7e]/i.test(u.pathname);
+    c('url_ascii', 'Caracteres de la URL', nonAscii ? 'warning' : 'pass', nonAscii ? 'La ruta contiene caracteres codificados o acentos.' : 'Solo caracteres ASCII legibles.', { evidence: nonAscii ? u.pathname : undefined, fix: 'Usa letras sin acentos, números y guiones.' });
+    const internalNofollow = tags(html, 'a').filter((a) => /nofollow/i.test(attr(a, 'rel') ?? '') && (() => { try { return new URL(attr(a, 'href') ?? '', p.finalUrl).hostname === u.hostname; } catch { return false; } })()).length;
+    c('internal_nofollow', 'Enlaces internos nofollow', internalNofollow ? 'warning' : 'pass', internalNofollow ? `${internalNofollow} enlace(s) internos con nofollow.` : 'Sin nofollow en enlaces internos.', { fix: 'No uses nofollow en enlaces a tu propio sitio.' });
+    const anchors = (html.match(/<a\b[^>]*>[\s\S]*?<\/a>/gi) ?? []).map((a) => stripTags(a).toLowerCase());
+    const generic = anchors.filter((a) => /^(click aqu[ií]|haz clic aqu[ií]|aqu[ií]|leer m[aá]s|m[aá]s info|ver m[aá]s|click here|read more|more)$/.test(a)).length;
+    c('anchor_text', 'Texto de enlaces', generic ? 'warning' : 'pass', generic ? `${generic} enlace(s) con texto genérico ("leer más", "aquí"…).` : 'Textos de enlace descriptivos.', { fix: 'Usa anclas que describan el destino.' });
+    const external = resolved.filter((l) => l.hostname !== u.hostname).length;
+    c('external_links', 'Enlaces externos', external ? 'pass' : 'warning', `${external} enlace(s) a otros dominios.`, { fix: 'Cita fuentes externas de autoridad cuando aporten valor.' });
+  }
+  {
+    const c = add('onpage');
+    const title = (inner(head, 'title')[0] ?? '').toLowerCase();
+    const h1 = (inner(html, 'h1')[0] ?? '').toLowerCase();
+    c('title_h1', 'Title distinto del H1', !title || !h1 ? 'na' : title === h1 ? 'warning' : 'pass', title === h1 ? 'Title y H1 son idénticos.' : 'Title y H1 se complementan.', { fix: 'Usa el H1 para el usuario y el title para el resultado de búsqueda.' });
+    const charset = /<meta[^>]+charset\s*=\s*["']?utf-8/i.test(head);
+    c('charset', 'Codificación UTF-8', charset ? 'pass' : 'warning', charset ? 'Declara UTF-8.' : 'No declara <meta charset="utf-8">.');
+    c('doctype', 'Doctype HTML5', /^\s*<!doctype html>/i.test(html) ? 'pass' : 'warning', /^\s*<!doctype html>/i.test(html) ? 'Doctype HTML5 correcto.' : 'Falta <!DOCTYPE html> al inicio.');
+    const emptyHeadings = (html.match(/<h[1-6]\b[^>]*>([\s\S]*?)<\/h[1-6]>/gi) ?? []).filter((h) => !stripTags(h)).length;
+    c('empty_headings', 'Encabezados vacíos', emptyHeadings ? 'warning' : 'pass', emptyHeadings ? `${emptyHeadings} encabezado(s) sin texto.` : 'Ningún encabezado vacío.');
+    const h2 = inner(html, 'h2').length;
+    c('h2_structure', 'Subtítulos H2', h2 >= 2 ? 'pass' : h2 === 1 ? 'warning' : 'fail', `${h2} H2 en la página.`, { fix: 'Divide el contenido en secciones con H2 descriptivos.' });
+    c('og_url', 'og:url', meta(head, 'og:url') ? 'pass' : 'warning', meta(head, 'og:url') ? 'og:url presente.' : 'Falta og:url.');
+  }
+  {
+    const c = add('content');
+    const paras = inner(html, 'p').filter((x) => x.length > 40);
+    const seen = new Set<string>();
+    let dup = 0;
+    for (const x of paras) { const k = x.toLowerCase(); if (seen.has(k)) dup++; else seen.add(k); }
+    c('duplicate_paragraphs', 'Párrafos duplicados', dup ? 'warning' : 'pass', dup ? `${dup} párrafo(s) repetidos.` : 'Sin párrafos repetidos.');
+    const long = paras.filter((x) => x.split(/\s+/).length > 150).length;
+    c('long_paragraphs', 'Párrafos largos', long ? 'warning' : paras.length ? 'pass' : 'na', long ? `${long} párrafo(s) de más de 150 palabras.` : 'Párrafos de longitud legible.', { fix: 'Párrafos de 2-4 frases mejoran lectura y extractos.' });
+    const fresh = /datePublished|dateModified/.test(html) || /<time\b[^>]*datetime=/i.test(html) || !!meta(head, 'article:modified_time') || !!meta(head, 'article:published_time');
+    c('freshness', 'Fecha de publicación/actualización', fresh ? 'pass' : 'warning', fresh ? 'Indica fecha de publicación o actualización.' : 'No se indica fecha del contenido.', { fix: 'Muestra y marca (datePublished/dateModified) la fecha de actualización.' });
+    const media = tags(html, 'img').length + tags(html, 'video').length + tags(html, 'iframe').length;
+    c('media', 'Elementos multimedia', media ? 'pass' : 'warning', media ? `${media} imagen(es)/vídeo(s).` : 'Sin imágenes ni vídeos.', { fix: 'Apoya el texto con imágenes, gráficos o vídeo propios.' });
+  }
+  {
+    const c = add('structured_data');
+    const flat = JSON.stringify(parsedLd);
+    const isOrg = hasType('Organization', 'LocalBusiness', 'Corporation', 'ProfessionalService');
+    c('schema_logo', 'Logo en Schema', !isOrg ? 'na' : /"logo"/.test(flat) ? 'pass' : 'warning', !isOrg ? 'Sin entidad Organization.' : /"logo"/.test(flat) ? 'Organization incluye logo.' : 'Organization sin logo.', { source: 'https://developers.google.com/search/docs/appearance/structured-data/logo' });
+    c('schema_sameas', 'sameAs (perfiles de marca)', !isOrg && !hasType('Person') ? 'na' : /"sameAs"/.test(flat) ? 'pass' : 'warning', /"sameAs"/.test(flat) ? 'Vincula perfiles oficiales con sameAs.' : 'Sin sameAs: ayuda a IA y Google a reconocer la entidad.');
+    const isArticle = hasType('Article', 'BlogPosting', 'NewsArticle');
+    c('schema_article', 'Datos de artículo', !isArticle ? 'na' : /"author"/.test(flat) && /"datePublished"/.test(flat) ? 'pass' : 'warning', !isArticle ? 'No es un artículo.' : 'Article con autor y fecha.', { fix: 'Incluye author, datePublished y dateModified.' });
+  }
+  {
+    const c = add('performance');
+    const nodes = (html.match(/<[a-z][a-z0-9-]*\b/gi) ?? []).length;
+    c('dom_size', 'Tamaño del DOM', nodes <= 1500 ? 'pass' : nodes <= 3000 ? 'warning' : 'fail', `≈ ${nodes} elementos HTML.`, { fix: 'Reduce wrappers y elementos ocultos.', source: 'https://developer.chrome.com/docs/lighthouse/performance/dom-size' });
+    const imgs = tags(html, 'img');
+    const noDims = imgs.filter((i) => !attr(i, 'width') || !attr(i, 'height')).length;
+    c('img_dimensions', 'Dimensiones de imágenes', !imgs.length ? 'na' : noDims === 0 ? 'pass' : noDims / imgs.length < 0.3 ? 'warning' : 'fail', !imgs.length ? 'Sin imágenes.' : `${noDims}/${imgs.length} imágenes sin width/height (riesgo de CLS).`, { fix: 'Declara width y height en cada <img>.' });
+    const srcs = imgs.map((i) => (attr(i, 'src') ?? '') + ' ' + (attr(i, 'srcset') ?? '')).join(' ') + ' ' + tags(html, 'source').map((s) => attr(s, 'type') ?? '').join(' ');
+    c('modern_images', 'Formatos modernos', !imgs.length ? 'na' : /\.(webp|avif)|image\/(webp|avif)|_next\/image|format=(webp|avif)/i.test(srcs) ? 'pass' : 'warning', /\.(webp|avif)|image\/(webp|avif)|_next\/image|format=(webp|avif)/i.test(srcs) ? 'Usa WebP/AVIF.' : 'No se detectan imágenes WebP/AVIF.', { fix: 'Sirve imágenes en WebP o AVIF.' });
+    const thirdParty = new Set(tags(html, 'script').map((s) => attr(s, 'src')).filter((s): s is string => !!s).map((s) => { try { return new URL(s, p.finalUrl).hostname; } catch { return ''; } }).filter((h) => h && h !== u.hostname)).size;
+    c('third_party', 'Scripts de terceros', thirdParty <= 4 ? 'pass' : thirdParty <= 8 ? 'warning' : 'fail', `${thirdParty} dominio(s) externos cargando scripts.`, { fix: 'Elimina etiquetas de terceros que no aporten.' });
+    const cc = p.headers['cache-control'] ?? '';
+    c('cache_control', 'Cabecera de caché', cc ? 'pass' : 'warning', cc ? `Cache-Control: ${cut(cc, 60)}` : 'Sin Cache-Control.');
+  }
+  {
+    const c = add('mobile_a11y');
+    const vp = (meta(head, 'viewport') ?? '').toLowerCase();
+    const noZoom = /user-scalable\s*=\s*(no|0)|maximum-scale\s*=\s*1(\.0)?\b/.test(vp);
+    c('zoom', 'Zoom permitido', !vp ? 'na' : noZoom ? 'fail' : 'pass', noZoom ? 'El viewport bloquea el zoom.' : 'El usuario puede hacer zoom.', { fix: 'Quita user-scalable=no y maximum-scale=1.' });
+    const buttons = (html.match(/<button\b[^>]*>[\s\S]*?<\/button>/gi) ?? []).filter((b) => !stripTags(b) && !/aria-label|title=/i.test(b)).length;
+    c('button_names', 'Botones con nombre accesible', buttons ? 'warning' : 'pass', buttons ? `${buttons} botón(es) sin texto ni aria-label.` : 'Todos los botones tienen nombre.');
+    const emptyLinks = (html.match(/<a\b[^>]*>[\s\S]*?<\/a>/gi) ?? []).filter((a) => !stripTags(a) && !/aria-label|title=|<img[^>]+alt=["'][^"']+/i.test(a)).length;
+    c('link_names', 'Enlaces con nombre accesible', emptyLinks ? 'warning' : 'pass', emptyLinks ? `${emptyLinks} enlace(s) sin texto accesible.` : 'Todos los enlaces tienen texto.');
+    c('landmarks', 'Estructura semántica', /<main\b/i.test(html) ? 'pass' : 'warning', /<main\b/i.test(html) ? 'Usa <main> y regiones semánticas.' : 'Sin elemento <main>.', { fix: 'Usa header, nav, main y footer.' });
+  }
+  {
+    const c = add('trust_eeat');
+    const mixed = u.protocol === 'https:' ? (html.match(/<(img|script|link|iframe|source)\b[^>]+(src|href)=["']http:\/\//gi) ?? []).length : 0;
+    c('mixed_content', 'Contenido mixto', u.protocol !== 'https:' ? 'na' : mixed ? 'fail' : 'pass', mixed ? `${mixed} recurso(s) cargados por http://.` : 'Todos los recursos por HTTPS.', { fix: 'Carga todos los recursos por HTTPS.' });
+    const sec = ['content-security-policy', 'x-content-type-options', 'referrer-policy'].filter((h) => p.headers[h]).length;
+    c('security_headers', 'Cabeceras de seguridad', sec >= 2 ? 'pass' : sec ? 'warning' : 'fail', `${sec}/3 cabeceras (CSP, X-Content-Type-Options, Referrer-Policy).`);
+    const nap = /tel:|"telephone"|"address"|<address\b/i.test(html);
+    c('nap', 'Datos de contacto (NAP)', nap ? 'pass' : 'warning', nap ? 'Muestra teléfono o dirección.' : 'No se detecta teléfono ni dirección.', { fix: 'Muestra nombre, dirección y teléfono, y márcalos en Schema.' });
+  }
+  {
+    const c = add('ai_geo');
+    for (const [bot, who] of [['Bingbot', 'Copilot / Bing'], ['Applebot-Extended', 'Apple Intelligence']] as [string, string][]) {
+      const ok = robotsAllows(p.robotsTxt, bot, path);
+      c(`bot_${bot.toLowerCase()}`, `${bot} (${who})`, ok ? 'pass' : 'warning', ok ? `${bot} puede acceder.` : `robots.txt bloquea ${bot}.`);
+    }
+    const first = inner(html, 'p').find((x) => x.length > 40) ?? '';
+    c('lead_answer', 'Respuesta directa al inicio', !first ? 'fail' : first.length <= 320 ? 'pass' : 'warning', !first ? 'No hay párrafo introductorio.' : `Primer párrafo de ${first.length} caracteres.`, { evidence: first ? cut(first, 120) : undefined, fix: 'Abre con 1-2 frases que respondan qué es y para quién.' });
+    const stats = (text.match(/\d+([.,]\d+)?\s?(%|€|\$|euros|clientes|años|horas)/gi) ?? []).length;
+    c('citable_data', 'Datos citables', stats >= 3 ? 'pass' : stats ? 'warning' : 'fail', `${stats} cifra(s) concretas en el texto.`, { fix: 'Incluye datos, cifras y resultados verificables: los asistentes de IA citan hechos.' });
+    c('entity_clarity', 'Entidad de marca clara', hasType('Organization', 'LocalBusiness', 'Person', 'Corporation') && /"name"/.test(JSON.stringify(parsedLd)) ? 'pass' : 'warning', 'La IA identifica mejor marcas declaradas con nombre, logo y perfiles.', { fix: 'Declara Organization con name, url, logo y sameAs.' });
+  }
+
   return (Object.keys(out) as CategoryId[]).map((id) => ({ id, name: CATEGORY_NAMES[id], score: null, checks: out[id] }));
 }

@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { finalizeReport, reportToMarkdown, type AuditCheck, type AuditReport, type CheckStatus } from '@/lib/seo-audit/scoring';
+import { CATEGORY_NAMES, finalizeReport, reportToMarkdown, type AuditCheck, type AuditReport, type CheckStatus } from '@/lib/seo-audit/scoring';
 import { LEAD_PRIVACY_NOTICE } from '@/lib/seo-audit/lead';
 import s from './audit.module.css';
+import ReportPrint from './report-print';
 
 const UNLOCK_KEY = 'agentics-seo-unlocked';
 const readUnlocked = () => { try { return sessionStorage.getItem(UNLOCK_KEY) === '1'; } catch { return false; } };
@@ -96,21 +97,43 @@ export default function AuditClient() {
     return { fails: flat.filter((k) => k.status === 'fail'), warns: flat.filter((k) => k.status === 'warning') };
   }, [report]);
 
+  function printPdf(r: AuditReport) {
+    const previous = document.title;
+    document.title = `Informe-SEO-${new URL(r.finalUrl).hostname}`;
+    const restore = () => { document.title = previous; window.removeEventListener('afterprint', restore); };
+    window.addEventListener('afterprint', restore);
+    window.print();
+  }
+
   const toggleAll = (value: boolean) => report && setOpen(Object.fromEntries(report.categories.map((c) => [c.id, value])));
 
   return (
+    <>
     <div className={s.page}>
       <header className={s.hero}>
         <div className={s.brand}><span className={s.brandMark}>◆</span>AGENTICS <span>SEO AUDIT</span></div>
-        <h1>Audita el <em>SEO técnico</em> y tu visibilidad en <em>asistentes de IA</em>.</h1>
-        <p className={s.lead}>Rastreo, on-page, Schema.org, Core Web Vitals, accesibilidad, E-E-A-T y acceso de GPTBot, ClaudeBot o PerplexityBot. Cada punto con su fuente oficial.</p>
+        <h1>Auditor <em>SEO</em> con <em>IA</em></h1>
+        <p className={s.lead}>Introduce la URL de cualquier web y obtén en segundos un análisis de más de 90 aspectos SEO: errores, oportunidades de mejora y recomendaciones para ganar visibilidad en Google y en buscadores con IA como ChatGPT, Perplexity o Gemini. Descarga el informe profesional en PDF.</p>
         <form className={s.form} onSubmit={run}>
           <label htmlFor="audit-url" className={s.sr}>URL a auditar</label>
           <input id="audit-url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://tuweb.com/pagina" required disabled={loading} />
-          <button type="submit" disabled={loading}>{loading ? 'Auditando…' : 'Auditar'}</button>
+          <button type="submit" disabled={loading}>{loading ? 'Analizando…' : 'Analizar mi web'}</button>
         </form>
         <p className={s.disclaimer}>Revisión técnica automatizada. No sustituye una estrategia SEO profesional.</p>
       </header>
+
+      {!report && !loading && (
+        <section className={s.features} aria-label="Qué incluye">
+          <div className={s.featureGrid}>
+            <div><b>90+</b><h3>Aspectos analizados</h3><p>Rastreo, on-page, contenido, Schema.org, Core Web Vitals, accesibilidad, E-E-A-T y seguridad.</p></div>
+            <div><b>IA</b><h3>Google y buscadores con IA</h3><p>Comprueba si ChatGPT, Claude, Perplexity, Gemini o Copilot pueden leerte y citarte.</p></div>
+            <div><b>PDF</b><h3>Informe profesional</h3><p>Resumen, puntuación por área, hallazgos y recomendaciones, listo para compartir con tu equipo o clientes.</p></div>
+          </div>
+          <ul className={s.areas}>
+            {Object.values(CATEGORY_NAMES).map((n, i) => <li key={n}><span>{i + 1}</span>{n}</li>)}
+          </ul>
+        </section>
+      )}
 
       {loading && (
         <output className={s.status} aria-live="polite">
@@ -139,7 +162,7 @@ export default function AuditClient() {
               <p className={s.small}>{report.generatedAt ? new Date(report.generatedAt).toLocaleString('es-ES') : ''}{report.ai.engine ? ` · IA: ${report.ai.engine}` : ''}</p>
             </div>
             {unlocked && <div className={s.actions}>
-              <button type="button" onClick={() => { toggleAll(true); setTimeout(() => window.print(), 50); }}>Descargar PDF</button>
+              <button type="button" onClick={() => printPdf(report)}>Descargar informe PDF</button>
               <button type="button" onClick={() => download(`auditoria-seo-${new URL(report.finalUrl).hostname}.md`, reportToMarkdown(report), 'text/markdown')}>Descargar .md</button>
             </div>}
           </div>
@@ -165,7 +188,7 @@ export default function AuditClient() {
           {!unlocked && (
             <form className={s.gate} onSubmit={submitLead}>
               <h2>Desbloquea el informe completo</h2>
-              <p>Detalle de las {report.categories.reduce((n, c) => n + c.checks.length, 0)} comprobaciones, cómo solucionar cada punto y descarga en PDF y Markdown.</p>
+              <p>Detalle de los {report.categories.reduce((n, c) => n + c.checks.length, 0)} aspectos analizados, cómo solucionar cada punto e informe profesional en PDF listo para compartir.</p>
               <div className={s.gateRow}>
                 <label>Nombre<input required minLength={2} maxLength={120} autoComplete="name" value={lead.name} onChange={(e) => setLead({ ...lead, name: e.target.value })} /></label>
                 <label>Email<input required type="email" maxLength={254} autoComplete="email" value={lead.email} onChange={(e) => setLead({ ...lead, email: e.target.value })} /></label>
@@ -211,5 +234,7 @@ export default function AuditClient() {
         </section>
       )}
     </div>
+    {report && unlocked && <ReportPrint report={report} preparedFor={lead.company || lead.name || undefined} />}
+    </>
   );
 }

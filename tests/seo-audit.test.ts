@@ -55,3 +55,9 @@ void test('lead: valida, normaliza y resume el informe', async () => {
   assert.throws(() => parseLead({ name: 'Ana', email: 'mal', privacy: true, report }), LeadInputError);
   assert.throws(() => parseLead({ name: 'Ana', email: 'a@b.com', privacy: false, report }), LeadInputError);
 });
+
+void test('cobertura: más de 90 comprobaciones deterministas', () => {
+  const page: PageData = { url: 'https://ej.com/', finalUrl: 'https://ej.com/', status: 200, headers: {}, html: '<!doctype html><html><head><title>x</title></head><body><p>hola</p></body></html>', redirects: 0, ttfbMs: 100, robotsTxt: null, sitemapFound: false, llmsTxtFound: false };
+  const total = runChecks(page).reduce((n, c) => n + c.checks.length, 0);
+  assert.ok(total >= 88, `solo ${total} comprobaciones`);
+});

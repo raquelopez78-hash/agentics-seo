@@ -13,3 +13,4 @@ form label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
 input { width: 100%; }
 small { display: block; font-size: 12px; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; animation: none !important; } }
+@media print { html, body { background: #fff !important; color: #0f172a; } }

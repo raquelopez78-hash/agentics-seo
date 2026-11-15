@@ -74,11 +74,9 @@
   .badge { justify-self: start; }
 }
 @media print {
-  .form, .actions, .toolbar, .disclaimer, .lead { display: none !important; }
-  .page { padding: 0; background: #fff; color: #000; }
-  .blockBody { display: block !important; }
-  .block, .scoreHead, .issues { break-inside: avoid; }
+  .page { display: none !important; }
 }
+
 .more { color: #8a90b5 !important; font-style: italic; }
 .gate { margin: 26px 0; padding: 28px; border-radius: 16px; border: 1px solid #4b3b78; background: linear-gradient(145deg, #1a1436, #0e1126); gap: 14px !important; }
 .gate h2 { font-size: 26px; margin: 0; letter-spacing: -.02em; }
@@ -92,3 +90,13 @@
 .privacy p { font-size: 12px; line-height: 1.6; }
 .gate button { align-self: flex-start; border: 0; border-radius: 10px; padding: 14px 26px; font-weight: 700; color: #fff; background: linear-gradient(110deg, #8a3ffc, #2c85ff); }
 @media (max-width: 720px) { .gateRow { grid-template-columns: 1fr; } .gate button { align-self: stretch; } }
+.features { margin-top: 64px; }
+.featureGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.featureGrid > div { background: #0e1126; border: 1px solid #2a2e4b; border-radius: 16px; padding: 22px; }
+.featureGrid b { display: inline-block; font-size: 15px; font-weight: 800; padding: 6px 12px; border-radius: 10px; color: #fff; background: linear-gradient(110deg, #8a3ffc, #2c85ff); }
+.featureGrid h3 { margin: 14px 0 6px; font-size: 18px; color: #fff; }
+.featureGrid p { font-size: 14px; }
+.areas { list-style: none; padding: 0; margin: 22px 0 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.areas li { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #c9cde8; background: #0b0e20; border: 1px solid #1d2140; border-radius: 10px; padding: 10px 12px; }
+.areas span { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; background: #1d2140; color: #9fb0ff; }
+@media (max-width: 720px) { .featureGrid { grid-template-columns: 1fr; } .areas { grid-template-columns: 1fr 1fr; } }
