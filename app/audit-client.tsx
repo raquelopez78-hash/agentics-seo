@@ -5,6 +5,7 @@ import { CATEGORY_NAMES, finalizeReport, reportToMarkdown, type AuditCheck, type
 import { LEAD_PRIVACY_NOTICE } from '@/lib/seo-audit/lead';
 import s from './audit.module.css';
 import ReportPrint from './report-print';
+import { AGENCY_CONTACT_URL, AGENCY_URL, LEGAL_LINKS } from '@/lib/site';
 
 const UNLOCK_KEY = 'agentics-seo-unlocked';
 const HISTORY_KEY = 'agentics-seo-history';
@@ -128,7 +129,7 @@ export default function AuditClient() {
     <>
     <div className={s.page}>
       <header className={s.hero}>
-        <div className={s.brand}><span className={s.brandMark}>◆</span>AGENTICS <span>SEO AUDIT</span></div>
+        <a className={s.brand} href={AGENCY_URL}><span className={s.brandMark}>◆</span>AGENTICS <span>SEO AUDIT</span></a>
         <h1>Auditor <em>SEO</em> con <em>IA</em></h1>
         <p className={s.lead}>Introduce la URL de cualquier web y obtén en segundos un análisis de más de 90 aspectos SEO: errores, oportunidades de mejora y recomendaciones para ganar visibilidad en Google y en buscadores con IA como ChatGPT, Perplexity o Gemini. Descarga el informe profesional en PDF.</p>
         <form className={s.form} onSubmit={run}>
@@ -278,10 +279,21 @@ export default function AuditClient() {
             </div>
           ))}
           </>}
-          <p className={s.footer}>Informe generado por AGENTICS · Auditoría SEO + AI SEO</p>
+          <div className={s.cta}>
+            <div>
+              <h2>¿Lo arreglamos por ti?</h2>
+              <p>En Agentics Projects corregimos estos puntos, optimizamos tu web para Google y buscadores con IA y automatizamos tu captación.</p>
+            </div>
+            <a href={AGENCY_CONTACT_URL}>Reservar diagnóstico gratuito</a>
+          </div>
         </section>
       )}
     </div>
+    <footer className={s.siteFooter}>
+      <a href={AGENCY_URL}>◆ Agentics Projects</a>
+      <span>Agentes de IA, automatización y marketing digital</span>
+      <nav aria-label="Legal">{LEGAL_LINKS.map((l) => <a key={l.href} href={l.href}>{l.label}</a>)}</nav>
+    </footer>
     {report && unlocked && <ReportPrint report={report} preparedFor={lead.company || lead.name || undefined} />}
     </>
   );

@@ -15,6 +15,12 @@ Lead magnet público: audita el SEO técnico y la visibilidad en asistentes de I
 - `app/`: página (`page.tsx`, `audit-client.tsx`) y API (`api/audit/*`).
 - `supabase/migrations/0001_seo_audit_leads.sql`: tabla `seo_audit.leads`.
 
+## Dominio: auditoria.agenticsprojects.com
+1. Vercel → proyecto → Settings → Domains → añade `auditoria.agenticsprojects.com`.
+2. Hostinger (hPanel) → Dominios → agenticsprojects.com → DNS → registro **CNAME**: nombre `auditoria`, destino el valor que indique Vercel.
+3. Variable `SITE_URL=https://auditoria.agenticsprojects.com` (canonical, sitemap y robots).
+4. Enlaza la herramienta desde la web de la agencia (menú, footer y CTAs).
+
 ## Despliegue
 1. Importa el repo en Vercel.
 2. Variables (ver `.env.example`): `SITE_URL`, `ANTHROPIC_API_KEY`, y para leads `DATABASE_URL` y/o `SEO_LEADS_WEBHOOK_URL` (+ `SEO_LEADS_WEBHOOK_SECRET`). Opcional `PAGESPEED_API_KEY`.
