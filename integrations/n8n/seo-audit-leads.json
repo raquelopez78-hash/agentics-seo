@@ -1,13 +1,21 @@
 {
-  "name": "Auditoría SEO · Leads → Airtable",
+  "name": "Auditoría SEO · Leads → Airtable + Gmail",
   "nodes": [
     {
-      "parameters": { "httpMethod": "POST", "path": "seo-audit-lead", "responseMode": "responseNode", "options": {} },
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "seo-audit-lead",
+        "responseMode": "responseNode",
+        "options": {}
+      },
       "id": "a1f0c6d2-0001-4b6e-9a01-000000000001",
       "name": "Webhook lead",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [0, 0],
+      "position": [
+        0,
+        0
+      ],
       "webhookId": "seo-audit-lead"
     },
     {
@@ -18,14 +26,30 @@
       "name": "Validar y mapear",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [240, 0]
+      "position": [
+        240,
+        0
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
           "conditions": [
-            { "id": "c1", "leftValue": "={{ $json.valid }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true", "singleValue": true } }
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
           ],
           "combinator": "and"
         },
@@ -35,54 +59,218 @@
       "name": "¿Válido?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [480, 0]
+      "position": [
+        480,
+        0
+      ]
     },
     {
-      "parameters": { "jsCode": "return [{ json: $input.first().json.fields }];" },
+      "parameters": {
+        "jsCode": "return [{ json: $input.first().json.fields }];"
+      },
       "id": "a1f0c6d2-0004-4b6e-9a01-000000000004",
       "name": "Campos",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [720, -100]
+      "position": [
+        720,
+        -100
+      ]
     },
     {
       "parameters": {
         "operation": "create",
-        "base": { "__rl": true, "mode": "id", "value": "appXXXXXXXXXXXXXX" },
-        "table": { "__rl": true, "mode": "id", "value": "tblXXXXXXXXXXXXXX" },
-        "columns": { "mappingMode": "autoMapInputData", "value": {} },
-        "options": { "typecast": true }
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "appXXXXXXXXXXXXXX"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "tblXXXXXXXXXXXXXX"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {
+          "typecast": true
+        }
       },
       "id": "a1f0c6d2-0005-4b6e-9a01-000000000005",
       "name": "Airtable · Crear lead",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
-      "position": [960, -100]
+      "position": [
+        960,
+        -100
+      ]
     },
     {
-      "parameters": { "respondWith": "json", "responseBody": "={{ { ok: true } }}", "options": { "responseCode": 200 } },
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
       "id": "a1f0c6d2-0006-4b6e-9a01-000000000006",
       "name": "Responder OK",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1200, -100]
+      "position": [
+        1200,
+        -100
+      ]
     },
     {
-      "parameters": { "respondWith": "json", "responseBody": "={{ { ok: false } }}", "options": { "responseCode": 401 } },
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false } }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
       "id": "a1f0c6d2-0007-4b6e-9a01-000000000007",
       "name": "Responder 401",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [720, 120]
+      "position": [
+        720,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Campos').item.json.Email }}",
+        "subject": "=Tu auditoría SEO de {{ $('Campos').item.json['URL auditada'].replace(/^https?:\\/\\//,'').replace(/\\/$/,'') }}: {{ $('Campos').item.json['Puntuación'] }}/100",
+        "emailType": "html",
+        "message": "=<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#0f172a\"><p style=\"font-size:13px;letter-spacing:2px;font-weight:bold;color:#2563eb\">◆ AGENTICS · AUDITORÍA SEO</p><h1 style=\"font-size:24px;margin:8px 0\">Hola {{ $('Campos').item.json.Nombre }}, aquí tienes tu auditoría</h1><p>Hemos analizado <b>{{ $('Campos').item.json['URL auditada'] }}</b>:</p><p style=\"font-size:40px;font-weight:bold;margin:8px 0;color:#1d4ed8\">{{ $('Campos').item.json['Puntuación'] }}/100 <span style=\"font-size:18px;color:#64748b\">({{ $('Campos').item.json.Nota }})</span></p><p>{{ $('Campos').item.json.Errores }} problema(s) crítico(s) y {{ $('Campos').item.json.Mejoras }} aspecto(s) a mejorar.</p>{{ $('Campos').item.json['Problemas principales'] ? '<h2 style=\"font-size:17px;margin-top:22px\">Lo más urgente</h2><p style=\"line-height:1.6\">' + $('Campos').item.json['Problemas principales'].replace(/\\n/g, '<br>') + '</p>' : '' }}<p style=\"margin-top:22px\">Puedes volver a lanzar la auditoría y descargar el informe completo en PDF cuando quieras:</p><p><a href=\"https://auditoria.agenticsprojects.com\" style=\"color:#2563eb\">auditoria.agenticsprojects.com</a></p><div style=\"margin:28px 0;padding:20px;border-radius:12px;background:#eef2ff\"><p style=\"margin:0 0 12px;font-weight:bold\">¿Quieres que lo arreglemos por ti?</p><p style=\"margin:0 0 16px\">Revisamos contigo el informe en una llamada de 20 minutos y te decimos qué priorizar. Sin compromiso.</p><a href=\"https://www.agenticsprojects.com/#contacto\" style=\"display:inline-block;padding:12px 20px;border-radius:8px;background:#2563eb;color:#fff;text-decoration:none;font-weight:bold\">Reservar diagnóstico gratuito</a></div><p style=\"font-size:12px;color:#64748b\">Recibes este email porque solicitaste la auditoría en auditoria.agenticsprojects.com. Responsable: Agentics Projects. Si no quieres más comunicaciones, responde con \"BAJA\".</p></div>",
+        "options": {
+          "appendAttribution": false,
+          "senderName": "Agentics Projects",
+          "replyTo": "agenticsprojects@gmail.com"
+        }
+      },
+      "id": "a1f0c6d2-0008-4b6e-9a01-000000000008",
+      "name": "Gmail · Informe al lead",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1440,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "agenticsprojects@gmail.com",
+        "subject": "=🔔 Lead auditoría SEO: {{ $('Campos').item.json.Nombre }} · {{ $('Campos').item.json['Puntuación'] }}/100",
+        "emailType": "html",
+        "message": "=<p><b>Nuevo lead de la auditoría SEO</b></p><ul><li>Nombre: {{ $('Campos').item.json.Nombre }}</li><li>Email: {{ $('Campos').item.json.Email }}</li><li>Empresa: {{ $('Campos').item.json.Empresa || '—' }}</li><li>Web: {{ $('Campos').item.json['URL auditada'] }}</li><li>Nota: {{ $('Campos').item.json['Puntuación'] }}/100 ({{ $('Campos').item.json.Nota }}) · {{ $('Campos').item.json.Errores }} críticos · {{ $('Campos').item.json.Mejoras }} a mejorar</li><li>Acepta comunicaciones comerciales: {{ $('Campos').item.json['Consentimiento marketing'] ? 'Sí' : 'No' }}</li></ul><p>{{ ($('Campos').item.json['Problemas principales'] || '').replace(/\\n/g, '<br>') }}</p>",
+        "options": {
+          "appendAttribution": false,
+          "senderName": "Auditoría SEO"
+        }
+      },
+      "id": "a1f0c6d2-0009-4b6e-9a01-000000000009",
+      "name": "Gmail · Aviso interno",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1680,
+        -100
+      ]
     }
   ],
   "connections": {
-    "Webhook lead": { "main": [[{ "node": "Validar y mapear", "type": "main", "index": 0 }]] },
-    "Validar y mapear": { "main": [[{ "node": "¿Válido?", "type": "main", "index": 0 }]] },
-    "¿Válido?": { "main": [[{ "node": "Campos", "type": "main", "index": 0 }], [{ "node": "Responder 401", "type": "main", "index": 0 }]] },
-    "Campos": { "main": [[{ "node": "Airtable · Crear lead", "type": "main", "index": 0 }]] },
-    "Airtable · Crear lead": { "main": [[{ "node": "Responder OK", "type": "main", "index": 0 }]] }
+    "Webhook lead": {
+      "main": [
+        [
+          {
+            "node": "Validar y mapear",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar y mapear": {
+      "main": [
+        [
+          {
+            "node": "¿Válido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Válido?": {
+      "main": [
+        [
+          {
+            "node": "Campos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder 401",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Campos": {
+      "main": [
+        [
+          {
+            "node": "Airtable · Crear lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable · Crear lead": {
+      "main": [
+        [
+          {
+            "node": "Responder OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder OK": {
+      "main": [
+        [
+          {
+            "node": "Gmail · Informe al lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail · Informe al lead": {
+      "main": [
+        [
+          {
+            "node": "Gmail · Aviso interno",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
-  "settings": { "executionOrder": "v1" },
+  "settings": {
+    "executionOrder": "v1"
+  },
   "pinData": {}
 }

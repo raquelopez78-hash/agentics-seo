@@ -13,7 +13,8 @@ Lead magnet público: audita el SEO técnico y la visibilidad en asistentes de I
 ## Estructura
 - `lib/seo-audit/`: `fetcher.ts` (descarga con protección SSRF), `checks.ts`, `scoring.ts`, `ai.ts`, `pagespeed.ts`, `lead.ts`, `rate-limit.ts`.
 - `app/`: página (`page.tsx`, `audit-client.tsx`) y API (`api/audit/*`).
-- `supabase/migrations/0001_seo_audit_leads.sql`: tabla `seo_audit.leads`.
+- `supabase/migrations/`: `0001` tabla `seo_audit.leads` (leads) · `0002` tabla `seo_audit.audits` (contador público: solo dominio y nota).
+- Contador: `GET /api/audit/count` → `{ total, today }` (hoy en hora de Madrid, caché 60 s). Sin `DATABASE_URL` no se muestra.
 
 ## Dominio: auditoria.agenticsprojects.com
 1. Vercel → proyecto → Settings → Domains → añade `auditoria.agenticsprojects.com`.
@@ -24,7 +25,7 @@ Lead magnet público: audita el SEO técnico y la visibilidad en asistentes de I
 ## Despliegue
 1. Importa el repo en Vercel.
 2. Variables (ver `.env.example`): `SITE_URL`, `ANTHROPIC_API_KEY`, y para leads `DATABASE_URL` y/o `SEO_LEADS_WEBHOOK_URL` (+ `SEO_LEADS_WEBHOOK_SECRET`). Opcional `PAGESPEED_API_KEY`.
-3. Si usas Postgres, aplica la migración en el SQL Editor de Supabase.
+3. Si usas Postgres, aplica las migraciones de `supabase/migrations/` en orden (SQL Editor de Supabase). Son repetibles.
 
 ## Desarrollo
 ```

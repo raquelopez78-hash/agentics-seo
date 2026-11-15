@@ -48,6 +48,13 @@ export default function AuditClient() {
   const [unlocked, setUnlocked] = useState(false);
   const [previous, setPrevious] = useState<HistoryEntry | null>(null);
   const [copied, setCopied] = useState(false);
+  const [counts, setCounts] = useState<{ total: number; today: number } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/audit/count').then((r) => r.json()).then((d: { total: number | null; today: number | null }) => {
+      if (typeof d.total === 'number' && d.total > 0) setCounts({ total: d.total, today: d.today ?? 0 });
+    }).catch(() => {});
+  }, [report]);
   const [lead, setLead] = useState({ name: '', email: '', company: '', privacy: false, marketing: false });
   const [leadState, setLeadState] = useState<{ sending: boolean; error: string }>({ sending: false, error: '' });
 
@@ -137,6 +144,7 @@ export default function AuditClient() {
           <input id="audit-url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://tuweb.com/pagina" required disabled={loading} />
           <button type="submit" disabled={loading}>{loading ? 'Analizando…' : 'Analizar mi web'}</button>
         </form>
+        {counts && <p className={s.counter}>Ya se han realizado <b>{counts.total.toLocaleString('es-ES')}</b> auditorías{counts.today > 0 ? <> · hoy, <b>{counts.today.toLocaleString('es-ES')}</b></> : null}.</p>}
         <p className={s.disclaimer}>Revisión técnica automatizada. No sustituye una estrategia SEO profesional.</p>
       </header>
 

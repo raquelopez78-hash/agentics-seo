@@ -1,6 +1,11 @@
 -- Leads de la auditoría SEO. Esquema propio, sin acceso desde la API REST pública de Supabase.
 create schema if not exists seo_audit;
-revoke all on schema seo_audit from public, anon, authenticated;
+revoke all on schema seo_audit from public;
+-- Roles de la API pública de Supabase (no existen en un Postgres normal).
+do $$ begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then execute 'revoke all on schema seo_audit from anon'; end if;
+  if exists (select 1 from pg_roles where rolname = 'authenticated') then execute 'revoke all on schema seo_audit from authenticated'; end if;
+end $$;
 
 create table if not exists seo_audit.leads (
   id text primary key,

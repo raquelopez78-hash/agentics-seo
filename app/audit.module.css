@@ -129,3 +129,5 @@
 .siteFooter nav a { color: #aeb3cf; text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 720px) { .cta { flex-direction: column; align-items: stretch; text-align: left; } .cta a { text-align: center; } }
 @media print { .siteFooter { display: none !important; } }
+.counter { font-size: 14px; margin: 14px 0 4px; color: #c9cde8 !important; }
+.counter b { background: linear-gradient(90deg, #ad68ff, #4bdcff); -webkit-background-clip: text; background-clip: text; color: transparent; }
