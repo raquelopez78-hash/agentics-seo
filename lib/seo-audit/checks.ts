@@ -466,7 +466,9 @@ export function runChecks(p: PageData): AuditCategory[] {
 
   // Móvil y accesibilidad
   {
-    const skip = /<a\b[^>]+href=["']#[^"']+["'][^>]*>\s*(saltar|ir al contenido|skip)/i.test(html.slice(0, 20000));
+    // Se busca al inicio del <body> (el <head> puede ser muy largo por el Schema).
+    const bodyStart = Math.max(0, html.search(/<body\b/i));
+    const skip = /<a\b[^>]+href=["']#[^"']+["'][^>]*>\s*(saltar|ir al contenido|skip)/i.test(html.slice(bodyStart, bodyStart + 5000));
     upsert('mobile_a11y', { id: 'skip_link', label: 'Enlace "saltar al contenido"', status: skip ? 'pass' : 'warning', message: skip ? 'Tiene enlace para saltar la navegación.' : 'Sin enlace "saltar al contenido" al inicio.', fix: 'Añade un enlace oculto visible al foco que lleve a <main>.', source: 'https://www.w3.org/WAI/WCAG21/Techniques/general/G1' });
     const tabPos = (html.match(/tabindex=["']?[1-9]/gi) ?? []).length;
     upsert('mobile_a11y', { id: 'tabindex', label: 'Sin tabindex positivo', status: tabPos ? 'warning' : 'pass', message: tabPos ? `${tabPos} elemento(s) con tabindex positivo.` : 'El orden de tabulación es el natural.', source: 'https://web.dev/articles/control-focus-with-tabindex' });

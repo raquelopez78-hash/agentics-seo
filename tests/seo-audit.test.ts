@@ -77,3 +77,10 @@ void test('DATABASE_URL: tolera errores habituales al pegarla', async () => {
   assert.equal(normalizeDbUrl('postgresql://postgres.abc:[YOUR-PASSWORD]@h:6543/postgres').url, null);
   assert.equal(normalizeDbUrl('https://algo').url, null);
 });
+
+void test('skip link detectado aunque el <head> sea largo', () => {
+  const head = `<head><title>x</title><script type="application/ld+json">${JSON.stringify({ a: 'x'.repeat(30000) })}</script></head>`;
+  const page: PageData = { url: 'https://ej.com/', finalUrl: 'https://ej.com/', status: 200, headers: {}, html: `<!doctype html><html lang="es">${head}<body><a class="skip-link" href="#contenido">Saltar al contenido</a><main id="contenido"><p>hola</p></main></body></html>`, redirects: 0, ttfbMs: 100, robotsTxt: null, sitemapFound: false, llmsTxtFound: false };
+  const k = runChecks(page).flatMap((c) => c.checks).find((c) => c.id === 'skip_link')!;
+  assert.equal(k.status, 'pass');
+});
