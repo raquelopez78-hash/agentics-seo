@@ -35,3 +35,13 @@ npm run dev
 npm test
 ```
 Límite: 10 auditorías/hora por IP (en memoria por instancia).
+
+## Planes
+- **Gratis:** hasta `FREE_AUDITS_PER_EMAIL` (2) informes completos por email, siempre dejando datos. Reabrir un informe ya desbloqueado no consume cupo. A partir del límite se muestra el Plan Pro (`POST /api/audit/lead` responde 402 `FREE_LIMIT`).
+- **Pro (`/pro`):** 39 €/mes o 390 €/año (`PRO_PRICE_*_EUR`). Auditorías ilimitadas sin formulario, PDF con logo y marca propios, historial.
+  - Pago: Stripe Checkout (`STRIPE_SECRET_KEY`), sin crear productos en el panel. Al volver de Stripe se confirma el pago y se abre la sesión.
+  - Webhook: `https://<dominio>/api/stripe/webhook` con los eventos `checkout.session.completed`, `customer.subscription.updated` y `customer.subscription.deleted` (`STRIPE_WEBHOOK_SECRET`). Si se cancela o deja de pagar, se corta el acceso.
+  - Acceso: enlace de un solo uso (20 min) por email vía SMTP (`SMTP_USER`, `SMTP_PASS`); sesión en cookie firmada (`SESSION_SECRET`, 30 días).
+  - Portal de cliente de Stripe para facturas, tarjeta y cancelación (activarlo en Stripe → Settings → Billing → Customer portal).
+  - Acceso manual sin pago: emails en `SEO_PRO_EMAILS`.
+  - Requiere la migración `0006_seo_audit_pro.sql` **antes** de desplegar.

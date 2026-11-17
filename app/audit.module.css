@@ -136,3 +136,20 @@
 .actionLink { font-size: 13px; text-align: center; padding: 9px 14px; border-radius: 8px; border: 1px solid #3a3f6a; color: #c9cde8; }
 .ctaButtons { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
 .cta .ctaGhost { background: transparent; border: 1px solid #575d88; box-shadow: none; text-align: center; }
+.lockedBlock { position: relative; }
+.blurred { filter: blur(5px); user-select: none; pointer-events: none; opacity: .7; }
+.lockNote { margin-top: 10px !important; font-weight: 600; color: #fff !important; }
+.freeNote { font-size: 13px !important; color: #9fb0ff !important; margin-top: -6px !important; }
+.proWall { margin: 26px 0; padding: 28px; border-radius: 16px; border: 1px solid #6b4bd1; background: radial-gradient(120% 140% at 100% 0%, #3a1f86 0%, #141233 55%, #0e1126 100%); display: flex; flex-direction: column; gap: 12px; }
+.proWall h2 { font-size: 26px; margin: 0; letter-spacing: -.02em; }
+.proWall ul { margin: 0; padding-left: 20px; color: #d9dcf0; display: flex; flex-direction: column; gap: 6px; font-size: 15px; }
+.proWall a { align-self: flex-start; margin-top: 6px; padding: 14px 24px; border-radius: 10px; font-weight: 700; color: #fff; background: linear-gradient(110deg, #8a3ffc, #2c85ff); box-shadow: 0 12px 30px #672cdd38; }
+.proBadge { align-self: flex-start; font-size: 11px; font-weight: 800; letter-spacing: .14em; padding: 5px 10px; border-radius: 999px; color: #1a1300; background: linear-gradient(90deg, #f5d38a, #f5b740); }
+@media (max-width: 720px) { .proWall a { align-self: stretch; text-align: center; } }
+.topBar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+.proLink { font-size: 13px; font-weight: 700; color: #fff; text-decoration: none; padding: 7px 14px; border-radius: 999px; border: 1px solid rgba(155, 92, 255, .6); background: rgba(155, 92, 255, .12); }
+.proLink:hover { background: rgba(155, 92, 255, .25); }
+.freeNote a, .proWall .small a { color: inherit; text-decoration: underline; }
+.review { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; margin-top: 28px; padding: 18px 22px; border-radius: 14px; background: #10132a; border: 1px solid #2a2e4b; }
+.review p { margin: 0; flex: 1; min-width: 240px; }
+.review a { white-space: nowrap; font-weight: 700; color: #1a1300; text-decoration: none; background: #f5b740; padding: 10px 18px; border-radius: 10px; }

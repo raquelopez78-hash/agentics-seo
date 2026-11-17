@@ -28,3 +28,22 @@ Para un n8n que no es accesible desde internet (por ejemplo `localhost`). Cada 5
 4. Activa el workflow.
 
 Estados de `webhook_status`: `skipped` (pendiente) → `processing` (recogido; se reintenta si pasa >30 min) → `sent`. Si un email falla, el workflow continúa y el lead queda marcado como enviado tras crear la fila en Airtable; revísalo allí.
+
+---
+
+## Seguimiento a los 2-3 días (`seo-audit-followup.json`)
+Cada día a las 10:07 (Europe/Madrid) envía **un único** email de seguimiento a los leads que ya recibieron su informe hace entre 2 y 14 días: nota, el problema más importante, CTA a una llamada de 20 minutos y enlace al informe. Marca `followup_sent_at` antes de enviar, así que nunca repite.
+
+1. Importa `seo-audit-followup.json`.
+2. Asigna la credencial **Supabase · seo_app** y tu cuenta de Gmail.
+3. Actívalo.
+
+Nota legal: es un seguimiento de la auditoría solicitada (finalidad aceptada en el formulario). Campañas comerciales posteriores, solo a quien marcó `Consentimiento marketing`.
+
+## Petición de reseña (`seo-audit-review-request.json`)
+Un único correo pidiendo opinión en Google, unos 5 días después del seguimiento (o 7 días tras el lead si no hubo seguimiento). Incluye los leads ya existentes (hasta 120 días). Máximo 20 al día.
+1. Importa el JSON y asigna las credenciales Postgres (`Supabase · seo_app`) y Gmail.
+2. En el nodo **Configuración** pega tu enlace de reseñas de Google. Sin él, el workflow se detiene sin enviar nada.
+3. Actívalo.
+
+Política de Google: no ofrezcas nada a cambio de la reseña ni pidas reseñas solo a clientes satisfechos.

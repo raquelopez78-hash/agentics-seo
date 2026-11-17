@@ -19,11 +19,15 @@ export type AuditCheck = {
   items?: CheckItem[];
 };
 
-export type AuditCategory = { id: CategoryId; name: string; score: number | null; checks: AuditCheck[] };
+export type CheckCounts = { fail: number; warning: number; pass: number; total: number };
+
+export type AuditCategory = { id: CategoryId; name: string; score: number | null; checks: AuditCheck[]; counts?: CheckCounts };
 
 export type AuditReport = {
   /** Identificador del informe guardado (solo con base de datos). */
   id?: string;
+  /** Adelanto sin detalle: el informe completo solo se entrega tras dejar los datos. */
+  locked?: boolean;
   url: string;
   finalUrl: string;
   generatedAt: string;

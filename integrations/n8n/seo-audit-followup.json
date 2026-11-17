@@ -1,0 +1,123 @@
+{
+  "name": "Auditoría SEO · Seguimiento a los 2-3 días",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 10,
+              "triggerAtMinute": 7
+            }
+          ]
+        }
+      },
+      "id": "c3f0c6d2-0001-4b6e-9a01-000000000001",
+      "name": "Cada día a las 10:07",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update seo_audit.leads l set followup_sent_at = now()\nwhere l.id in (\n  select id from seo_audit.leads\n  where webhook_status = 'sent'\n    and followup_sent_at is null\n    and created_at < now() - interval '2 days'\n    and created_at > now() - interval '14 days'\n  order by created_at\n  limit 20\n  for update skip locked\n)\nreturning l.id, l.name, l.email, l.audited_url, l.score, l.grade, l.fails, l.warnings, l.top_issues, l.report_url;",
+        "options": {}
+      },
+      "id": "c3f0c6d2-0002-4b6e-9a01-000000000002",
+      "name": "Supabase · Leads para seguimiento",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        240,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "",
+          "name": "Supabase · seo_app"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Prepara los datos del email de seguimiento.\nconst b = $json;\nconst issues = Array.isArray(b.top_issues) ? b.top_issues : JSON.parse(b.top_issues || '[]');\nconst first = issues[0];\nconst host = String(b.audited_url).replace(/^https?:\\/\\//, '').replace(/\\/$/, '');\nconst nombre = String(b.name || '').trim().split(/\\s+/)[0] || 'hola';\nconst esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst destacado = first\n  ? `<p>Lo más importante que vimos: <b>${esc(first.label)}</b> (${esc(first.category)}). ${esc(first.message)}</p>`\n  : `<p>No vimos errores graves, pero sí <b>${Number(b.warnings) || 0} aspectos a mejorar</b> que pueden darte más visibilidad en Google y en los buscadores con IA.</p>`;\nreturn { json: { ID: b.id, Email: b.email, Nombre: nombre, Host: host, Nota: b.score === null ? '' : String(Number(b.score)), Destacado: destacado, Informe: b.report_url || 'https://auditoria.agenticsprojects.com' } };"
+      },
+      "id": "c3f0c6d2-0003-4b6e-9a01-000000000003",
+      "name": "Datos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Datos').item.json.Email }}",
+        "subject": "={{ $('Datos').item.json.Nombre }}, ¿pudiste revisar la auditoría de {{ $('Datos').item.json.Host }}?",
+        "emailType": "html",
+        "message": "=<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#0f172a;line-height:1.6\"><p>Hola {{ $('Datos').item.json.Nombre }}:</p><p>Hace un par de días auditaste <b>{{ $('Datos').item.json.Host }}</b> con nuestra herramienta y obtuvo <b>{{ $('Datos').item.json.Nota }}/100</b>.</p>{{ $('Datos').item.json.Destacado }}<p>Muchas de estas mejoras se resuelven rápido, pero cuesta saber por dónde empezar y qué impacto tiene cada una. Si quieres, lo revisamos juntos en una videollamada de 20 minutos, gratis y sin compromiso: te digo qué arreglar primero y por qué.</p><p style=\"margin:24px 0\"><a href=\"https://www.agenticsprojects.com/#contacto\" style=\"display:inline-block;padding:12px 22px;border-radius:8px;background:#2563eb;color:#fff;text-decoration:none;font-weight:bold\">Reservar 20 minutos</a></p><p>Si prefieres hacerlo por tu cuenta, aquí tienes de nuevo <a href=\"{{ $('Datos').item.json.Informe }}\" style=\"color:#2563eb\">tu informe completo</a>.</p><p>Un saludo,<br><b>Raquel López</b><br>Agentics Projects · Agentes de IA y automatización<br><a href=\"https://www.agenticsprojects.com\" style=\"color:#2563eb\">agenticsprojects.com</a></p><p style=\"font-size:12px;color:#64748b;margin-top:28px\">Te escribimos porque solicitaste una auditoría en auditoria.agenticsprojects.com. Es el único seguimiento que te enviaremos sobre ella. Si no quieres recibir más correos, responde con \"BAJA\".</p></div>",
+        "options": {
+          "appendAttribution": false,
+          "senderName": "Raquel · Agentics Projects",
+          "replyTo": "agenticsprojects@gmail.com"
+        }
+      },
+      "id": "c3f0c6d2-0004-4b6e-9a01-000000000004",
+      "name": "Gmail · Seguimiento",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        720,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Cada día a las 10:07": {
+      "main": [
+        [
+          {
+            "node": "Supabase · Leads para seguimiento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase · Leads para seguimiento": {
+      "main": [
+        [
+          {
+            "node": "Datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Datos": {
+      "main": [
+        [
+          {
+            "node": "Gmail · Seguimiento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Madrid"
+  },
+  "pinData": {}
+}

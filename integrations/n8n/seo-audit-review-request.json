@@ -1,0 +1,147 @@
+{
+  "name": "Auditoría SEO · Petición de reseña",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 11,
+              "triggerAtMinute": 13
+            }
+          ]
+        }
+      },
+      "id": "d4a1e7b0-0001-4c11-9b01-000000000001",
+      "name": "Cada día a las 11:13",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pega aquí tu enlace de reseñas de Google (Perfil de Empresa → \"Pedir reseñas\"). Sin él no se envía nada.\nconst REVIEW_URL = 'PEGA_AQUI_TU_ENLACE_DE_RESENAS';\nif (!/^https:\\/\\//.test(REVIEW_URL)) throw new Error('Falta el enlace de reseñas en el nodo Configuración.');\nreturn [{ json: { review: REVIEW_URL } }];"
+      },
+      "id": "d4a1e7b0-0002-4c11-9b01-000000000002",
+      "name": "Configuración",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update seo_audit.leads l set review_requested_at = now()\nwhere l.id in (\n  select id from seo_audit.leads\n  where review_requested_at is null\n    and created_at > now() - interval '120 days'\n    and (followup_sent_at < now() - interval '5 days'\n         or (followup_sent_at is null and created_at < now() - interval '7 days'))\n  order by created_at\n  limit 20\n  for update skip locked\n)\nreturning l.id, l.name, l.email, l.audited_url;",
+        "options": {}
+      },
+      "id": "d4a1e7b0-0003-4c11-9b01-000000000003",
+      "name": "Supabase · Leads para reseña",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        440,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "",
+          "name": "Supabase · seo_app"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const b = $json;\nconst host = String(b.audited_url).replace(/^https?:\\/\\//, '').replace(/\\/$/, '');\nconst nombre = String(b.name || '').trim().split(/\\s+/)[0] || 'hola';\nreturn { json: { Email: b.email, Nombre: nombre, Host: host, Resena: $('Configuración').first().json.review } };"
+      },
+      "id": "d4a1e7b0-0004-4c11-9b01-000000000004",
+      "name": "Datos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Datos').item.json.Email }}",
+        "subject": "={{ $('Datos').item.json.Nombre }}, ¿qué te pareció la auditoría de {{ $('Datos').item.json.Host }}?",
+        "emailType": "html",
+        "message": "=<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#0f172a;line-height:1.6\"><p>Hola {{ $('Datos').item.json.Nombre }}:</p><p>Hace unos días auditaste <b>{{ $('Datos').item.json.Host }}</b> con nuestro Auditor SEO con IA. Esperamos que te haya servido para saber por dónde mejorar.</p><p>¿Nos dedicas 30 segundos? Tu opinión en Google, sea la que sea, nos ayuda a mejorar la herramienta y a seguir ofreciéndola gratis.</p><p style=\"margin:24px 0\"><a href=\"{{ $('Datos').item.json.Resena }}\" style=\"display:inline-block;padding:12px 22px;border-radius:8px;background:#f5b740;color:#1a1300;text-decoration:none;font-weight:bold\">Dejar mi opinión ★</a></p><p>¡Gracias!<br><b>Raquel López</b><br>Agentics Projects · Agentes de IA y automatización<br><a href=\"https://www.agenticsprojects.com\" style=\"color:#2563eb\">agenticsprojects.com</a></p><p style=\"font-size:12px;color:#64748b;margin-top:28px\">Te escribimos porque solicitaste una auditoría en auditoria.agenticsprojects.com. Es el único correo que te enviaremos sobre ello. Si no quieres recibir más correos, responde con \\\"BAJA\\\".</p></div>",
+        "options": {
+          "appendAttribution": false,
+          "senderName": "Raquel · Agentics Projects",
+          "replyTo": "agenticsprojects@gmail.com"
+        }
+      },
+      "id": "d4a1e7b0-0005-4c11-9b01-000000000005",
+      "name": "Gmail · Petición de reseña",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        880,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Cada día a las 11:13": {
+      "main": [
+        [
+          {
+            "node": "Configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configuración": {
+      "main": [
+        [
+          {
+            "node": "Supabase · Leads para reseña",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase · Leads para reseña": {
+      "main": [
+        [
+          {
+            "node": "Datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Datos": {
+      "main": [
+        [
+          {
+            "node": "Gmail · Petición de reseña",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Madrid"
+  },
+  "pinData": {}
+}

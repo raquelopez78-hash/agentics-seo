@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { pg } from '@/db/pg';
 import { LEAD_PRIVACY_VERSION, LeadInputError, parseLead, type Lead } from '@/lib/seo-audit/lead';
 import { clientIp, rateLimited } from '@/lib/seo-audit/rate-limit';
+import { checkFreeQuota } from '@/lib/seo-audit/quota';
 import { isValidReportId, loadReport, reportUrl, unlockReport } from '@/lib/seo-audit/reports';
 
 export const dynamic = 'force-dynamic';
@@ -33,12 +34,13 @@ export async function POST(request: Request) {
   if (raw.length > 400_000) return json({ error: 'Solicitud demasiado grande.' }, 413);
   let lead: Lead;
   let reportId: string | null = null;
+  let fullReport: unknown = null;
   try {
     const body = JSON.parse(raw) as Record<string, unknown>;
     // Si el informe está guardado en servidor, se usa ese (fiable) en lugar del que envía el navegador.
     if (isValidReportId(body.reportId)) {
       const stored = await loadReport(body.reportId, { unlockedOnly: false });
-      if (stored) { body.report = stored; reportId = body.reportId; }
+      if (stored) { body.report = stored; reportId = body.reportId; fullReport = stored; }
     }
     lead = parseLead(body);
   } catch (error) {
@@ -46,6 +48,15 @@ export async function POST(request: Request) {
   }
   const id = randomUUID();
   const shareUrl = reportId ? reportUrl(reportId) : null;
+  // Plan gratuito: máximo de informes por email.
+  const quota = await checkFreeQuota(lead.email, shareUrl, lead.auditedUrl);
+  if (!quota.allowed) {
+    return json({ error: `Has usado tus ${quota.limit} auditorías gratuitas. Para seguir auditando, consulta el Plan Pro.`, code: 'FREE_LIMIT', used: quota.used, limit: quota.limit }, 402);
+  }
+  if (quota.alreadyUnlocked && reportId) {
+    // Mismo informe ya desbloqueado por este email: se devuelve sin registrar un lead duplicado.
+    return json({ ok: true, shareUrl, report: (await loadReport(reportId, { unlockedOnly: false })) ?? fullReport });
+  }
   const webhook = await sendWebhook(id, lead, shareUrl);
   let stored = false;
   if (process.env.DATABASE_URL) {
@@ -61,6 +72,10 @@ export async function POST(request: Request) {
     }
   }
   if (!stored && webhook !== 'sent') return json({ error: 'No se pudo registrar tu solicitud. Inténtalo de nuevo en unos minutos.' }, 503);
-  if (reportId) await unlockReport(reportId);
-  return json({ ok: true, shareUrl });
+  if (reportId) {
+    await unlockReport(reportId);
+    // Versión más reciente (puede incluir ya los datos de PageSpeed).
+    fullReport = (await loadReport(reportId, { unlockedOnly: false })) ?? fullReport;
+  }
+  return json({ ok: true, shareUrl, report: fullReport });
 }
