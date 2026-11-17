@@ -150,3 +150,6 @@
 .proLink { font-size: 13px; font-weight: 700; color: #fff; text-decoration: none; padding: 7px 14px; border-radius: 999px; border: 1px solid rgba(155, 92, 255, .6); background: rgba(155, 92, 255, .12); }
 .proLink:hover { background: rgba(155, 92, 255, .25); }
 .freeNote a, .proWall .small a { color: inherit; text-decoration: underline; }
+.review { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; margin-top: 28px; padding: 18px 22px; border-radius: 14px; background: #10132a; border: 1px solid #2a2e4b; }
+.review p { margin: 0; flex: 1; min-width: 240px; }
+.review a { white-space: nowrap; font-weight: 700; color: #1a1300; text-decoration: none; background: #f5b740; padding: 10px 18px; border-radius: 10px; }

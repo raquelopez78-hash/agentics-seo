@@ -6,7 +6,7 @@ import { CATEGORY_NAMES, finalizeReport, reportToMarkdown, type AuditCheck, type
 import { LEAD_PRIVACY_NOTICE } from '@/lib/seo-audit/lead';
 import s from './audit.module.css';
 import ReportPrint from './report-print';
-import { AGENCY_CONTACT_URL, AGENCY_URL, LEGAL_LINKS } from '@/lib/site';
+import { AGENCY_CONTACT_URL, AGENCY_URL, LEGAL_LINKS, REVIEW_URL } from '@/lib/site';
 
 const LEAD_KEY = 'agentics-seo-lead';
 type LeadData = { name: string; email: string; company: string; privacy: boolean; marketing: boolean };
@@ -355,6 +355,12 @@ export default function AuditClient() {
             </div>
           ))}
           </>}
+          {unlocked && REVIEW_URL && (
+            <div className={s.review}>
+              <p><b>¿Te ha resultado útil la auditoría?</b> Una reseña en Google nos ayuda mucho a seguir ofreciéndola gratis.</p>
+              <a href={REVIEW_URL} target="_blank" rel="noopener noreferrer">Dejar una reseña ★</a>
+            </div>
+          )}
           <div className={s.cta}>
             <div>
               <h2>¿Lo arreglamos por ti?</h2>
