@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { CATEGORY_NAMES, finalizeReport, reportToMarkdown, type AuditCheck, type AuditReport, type CheckStatus } from '@/lib/seo-audit/scoring';
 import { LEAD_PRIVACY_NOTICE } from '@/lib/seo-audit/lead';
@@ -65,6 +66,13 @@ export default function AuditClient() {
   const [lead, setLead] = useState({ name: '', email: '', company: '', privacy: false, marketing: false });
   const [leadState, setLeadState] = useState<{ sending: boolean; error: string }>({ sending: false, error: '' });
   const [proWall, setProWall] = useState<{ limit: number } | null>(null);
+  const [pro, setPro] = useState<{ email: string; brand: { name: string | null; logo: string | null } } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/pro/me').then((r) => (r.ok ? r.json() : null)).then((d: { pro?: boolean; email: string; brand: { name: string | null; logo: string | null } } | null) => {
+      if (d?.pro) setPro({ email: d.email, brand: d.brand });
+    }).catch(() => {});
+  }, []);
 
   // Envía el lead y recibe el informe completo (el servidor no lo entrega antes).
   async function unlockWith(data: LeadData, rep: AuditReport) {
@@ -110,13 +118,15 @@ export default function AuditClient() {
       const res = await fetch('/api/audit', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Error en la auditoría.');
-      const r = data as AuditReport;
+      const r = data as AuditReport & { pro?: boolean; shareUrl?: string | null };
       setReport(r);
       setPrevious(compareWithHistory(r).previous);
       setOpen(Object.fromEntries(r.categories.map((c) => [c.id, c.checks.some((k) => k.status === 'fail')])));
       const saved = readSavedLead();
-      setUnlocked(false);
+      setUnlocked(!!r.pro);
+      if (r.pro && r.shareUrl) setShareUrl(r.shareUrl);
       void loadPerformance(r);
+      if (r.pro) return;
       // Misma visita: se reutilizan los datos ya dados y la nueva web queda registrada como lead.
       if (saved) { setLead(saved); void unlockWith(saved, r); }
     } catch (err) {
@@ -163,7 +173,10 @@ export default function AuditClient() {
     <>
     <div className={s.page}>
       <header className={s.hero}>
-        <a className={s.brand} href={AGENCY_URL}><span className={s.brandMark}>◆</span>AGENTICS <span>SEO AUDIT</span></a>
+        <div className={s.topBar}>
+          <a className={s.brand} href={AGENCY_URL}><span className={s.brandMark}>◆</span>AGENTICS <span>SEO AUDIT</span></a>
+          <Link className={s.proLink} href="/pro">{pro ? 'Mi cuenta Pro' : 'Plan Pro'}</Link>
+        </div>
         <h1>Auditor <em>SEO</em> con <em>IA</em></h1>
         <p className={s.lead}>Introduce la URL de cualquier web y obtén en segundos un análisis de más de 90 aspectos SEO: errores, oportunidades de mejora y recomendaciones para ganar visibilidad en Google y en buscadores con IA como ChatGPT, Perplexity o Gemini. Descarga el informe profesional en PDF.</p>
         <form className={s.form} onSubmit={run}>
@@ -286,15 +299,15 @@ export default function AuditClient() {
                 <li>Informe PDF con tu marca, listo para entregar a tus clientes</li>
                 <li>Historial y evolución de cada web</li>
               </ul>
-              <a href={`${AGENCY_CONTACT_URL}`}>Quiero el Plan Pro</a>
-              <p className={s.small}>¿Prefieres que mejoremos tu web nosotros? Reserva un diagnóstico gratuito con el mismo botón.</p>
+              <Link href="/pro">Ver el Plan Pro</Link>
+              <p className={s.small}>¿Ya eres Pro? <Link href="/pro">Entra con tu email</Link>. ¿Prefieres que mejoremos tu web nosotros? <a href={AGENCY_CONTACT_URL}>Reserva un diagnóstico gratuito</a>.</p>
             </div>
           )}
 
           {!unlocked && !proWall && (
             <form className={s.gate} onSubmit={submitLead}>
               <h2>Desbloquea el informe completo</h2>
-              <p className={s.freeNote}>Gratis: hasta 2 auditorías completas por persona.</p>
+              <p className={s.freeNote}>Gratis: hasta 2 auditorías completas por persona. ¿Auditas webs de clientes? <Link href="/pro">Plan Pro ilimitado</Link>.</p>
               <p>Ve qué falla exactamente, cómo solucionarlo paso a paso y descarga el informe profesional en PDF ({report.categories.reduce((n, c) => n + (c.counts?.total ?? c.checks.length), 0)} aspectos analizados).</p>
               <div className={s.gateRow}>
                 <label>Nombre<input required minLength={2} maxLength={120} autoComplete="name" value={lead.name} onChange={(e) => setLead({ ...lead, name: e.target.value })} /></label>
@@ -357,7 +370,7 @@ export default function AuditClient() {
       <span>Agentes de IA, automatización y marketing digital</span>
       <nav aria-label="Legal">{LEGAL_LINKS.map((l) => <a key={l.href} href={l.href}>{l.label}</a>)}</nav>
     </footer>
-    {report && unlocked && <ReportPrint report={report} preparedFor={lead.company || lead.name || undefined} />}
+    {report && unlocked && <ReportPrint report={report} preparedFor={pro ? undefined : lead.company || lead.name || undefined} brand={pro?.brand} />}
     </>
   );
 }

@@ -22,7 +22,11 @@ function Donut({ pass, warn, fail }: { pass: number; warn: number; fail: number 
   );
 }
 
-export default function ReportPrint({ report, preparedFor }: { report: AuditReport; preparedFor?: string }) {
+type Brand = { name: string | null; logo: string | null };
+
+export default function ReportPrint({ report, preparedFor, brand }: { report: AuditReport; preparedFor?: string; brand?: Brand }) {
+  const white = !!(brand && (brand.name || brand.logo));
+  const brandLabel = white ? brand?.name ?? '' : 'AGENTICS';
   const all = report.categories.flatMap((c) => c.checks.map((k) => ({ ...k, cat: c.name })));
   const pass = all.filter((k) => k.status === 'pass').length;
   const warn = all.filter((k) => k.status === 'warning').length;
@@ -39,7 +43,10 @@ export default function ReportPrint({ report, preparedFor }: { report: AuditRepo
     <div className={r.report} aria-hidden="true">
       <section className={r.sheet}>
         <header className={r.top}>
-          <span className={r.brand}><b>◆</b> AGENTICS</span>
+          {white
+            // oxlint-disable-next-line next/no-img-element -- logo en data URL para imprimir
+            ? <span className={r.brand}>{brand?.logo && <img src={brand.logo} alt="" className={r.logo} />}{brand?.name}</span>
+            : <span className={r.brand}><b>◆</b> AGENTICS</span>}
           <span>{date}</span>
         </header>
 
@@ -122,7 +129,7 @@ export default function ReportPrint({ report, preparedFor }: { report: AuditRepo
         </section>
       ))}
 
-      <footer className={r.foot}>Informe generado por AGENTICS · Auditor SEO con IA · {report.finalUrl} · {date}. Revisión técnica automatizada; no sustituye una estrategia SEO profesional.</footer>
+      <footer className={r.foot}>Informe generado por {brandLabel || 'AGENTICS'}{white ? '' : ' · Auditor SEO con IA'} · {report.finalUrl} · {date}. Revisión técnica automatizada; no sustituye una estrategia SEO profesional.</footer>
     </div>
   );
 }

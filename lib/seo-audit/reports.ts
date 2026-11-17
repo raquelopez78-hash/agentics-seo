@@ -9,13 +9,14 @@ const enabled = () => !!process.env.DATABASE_URL;
 export const isValidReportId = (id: unknown): id is string => typeof id === 'string' && /^[A-Za-z0-9_-]{10,16}$/.test(id);
 export const reportUrl = (id: string) => `${SITE_URL}/r/${id}`;
 
-export async function saveReport(report: AuditReport): Promise<string | undefined> {
+/** owner: email Pro (historial); el informe de un Pro se guarda ya desbloqueado. */
+export async function saveReport(report: AuditReport, owner: string | null = null): Promise<string | undefined> {
   if (!enabled()) return undefined;
   const id = randomBytes(8).toString('base64url');
   try {
     const sql = pg();
-    await sql`insert into seo_audit.reports (id, host, final_url, score, report)
-      values (${id}, ${new URL(report.finalUrl).hostname}, ${report.finalUrl}, ${report.score}, ${sql.json({ ...report, id } as never)})`;
+    await sql`insert into seo_audit.reports (id, host, final_url, score, report, owner_email, unlocked)
+      values (${id}, ${new URL(report.finalUrl).hostname}, ${report.finalUrl}, ${report.score}, ${sql.json({ ...report, id } as never)}, ${owner}, ${!!owner})`;
     return id;
   } catch (error) {
     console.error('seo-audit reports', (error as { code?: string })?.code ?? error);

@@ -146,3 +146,7 @@
 .proWall a { align-self: flex-start; margin-top: 6px; padding: 14px 24px; border-radius: 10px; font-weight: 700; color: #fff; background: linear-gradient(110deg, #8a3ffc, #2c85ff); box-shadow: 0 12px 30px #672cdd38; }
 .proBadge { align-self: flex-start; font-size: 11px; font-weight: 800; letter-spacing: .14em; padding: 5px 10px; border-radius: 999px; color: #1a1300; background: linear-gradient(90deg, #f5d38a, #f5b740); }
 @media (max-width: 720px) { .proWall a { align-self: stretch; text-align: center; } }
+.topBar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+.proLink { font-size: 13px; font-weight: 700; color: #fff; text-decoration: none; padding: 7px 14px; border-radius: 999px; border: 1px solid rgba(155, 92, 255, .6); background: rgba(155, 92, 255, .12); }
+.proLink:hover { background: rgba(155, 92, 255, .25); }
+.freeNote a, .proWall .small a { color: inherit; text-decoration: underline; }
