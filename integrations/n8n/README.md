@@ -43,7 +43,7 @@ Nota legal: es un seguimiento de la auditoría solicitada (finalidad aceptada en
 ## Petición de reseña (`seo-audit-review-request.json`)
 Un único correo pidiendo opinión en Google, unos 5 días después del seguimiento (o 7 días tras el lead si no hubo seguimiento). Incluye los leads ya existentes (hasta 120 días). Máximo 20 al día.
 1. Importa el JSON y asigna las credenciales Postgres (`Supabase · seo_app`) y Gmail.
-2. En el nodo **Configuración** pega tu enlace de reseñas de Google. Sin él, el workflow se detiene sin enviar nada.
+2. El enlace de reseñas ya está en el nodo **Configuración** (cámbialo ahí si cambia).
 3. Actívalo.
 
 Política de Google: no ofrezcas nada a cambio de la reseña ni pidas reseñas solo a clientes satisfechos.

@@ -25,7 +25,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Pega aquí tu enlace de reseñas de Google (Perfil de Empresa → \"Pedir reseñas\"). Sin él no se envía nada.\nconst REVIEW_URL = 'PEGA_AQUI_TU_ENLACE_DE_RESENAS';\nif (!/^https:\\/\\//.test(REVIEW_URL)) throw new Error('Falta el enlace de reseñas en el nodo Configuración.');\nreturn [{ json: { review: REVIEW_URL } }];"
+        "jsCode": "// Pega aquí tu enlace de reseñas de Google (Perfil de Empresa → \"Pedir reseñas\"). Sin él no se envía nada.\nconst REVIEW_URL = 'https://g.page/r/CYnyzOuZY0jbEBM/review';\nif (!/^https:\\/\\//.test(REVIEW_URL)) throw new Error('Falta el enlace de reseñas en el nodo Configuración.');\nreturn [{ json: { review: REVIEW_URL } }];"
       },
       "id": "d4a1e7b0-0002-4c11-9b01-000000000002",
       "name": "Configuración",
