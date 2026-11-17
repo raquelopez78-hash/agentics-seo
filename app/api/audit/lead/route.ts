@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { pg } from '@/db/pg';
 import { LEAD_PRIVACY_VERSION, LeadInputError, parseLead, type Lead } from '@/lib/seo-audit/lead';
 import { clientIp, rateLimited } from '@/lib/seo-audit/rate-limit';
+import { checkFreeQuota } from '@/lib/seo-audit/quota';
 import { isValidReportId, loadReport, reportUrl, unlockReport } from '@/lib/seo-audit/reports';
 
 export const dynamic = 'force-dynamic';
@@ -47,6 +48,15 @@ export async function POST(request: Request) {
   }
   const id = randomUUID();
   const shareUrl = reportId ? reportUrl(reportId) : null;
+  // Plan gratuito: máximo de informes por email.
+  const quota = await checkFreeQuota(lead.email, shareUrl, lead.auditedUrl);
+  if (!quota.allowed) {
+    return json({ error: `Has usado tus ${quota.limit} auditorías gratuitas. Para seguir auditando, consulta el Plan Pro.`, code: 'FREE_LIMIT', used: quota.used, limit: quota.limit }, 402);
+  }
+  if (quota.alreadyUnlocked && reportId) {
+    // Mismo informe ya desbloqueado por este email: se devuelve sin registrar un lead duplicado.
+    return json({ ok: true, shareUrl, report: (await loadReport(reportId, { unlockedOnly: false })) ?? fullReport });
+  }
   const webhook = await sendWebhook(id, lead, shareUrl);
   let stored = false;
   if (process.env.DATABASE_URL) {

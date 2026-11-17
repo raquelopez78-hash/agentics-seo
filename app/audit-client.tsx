@@ -64,6 +64,7 @@ export default function AuditClient() {
   }, [report]);
   const [lead, setLead] = useState({ name: '', email: '', company: '', privacy: false, marketing: false });
   const [leadState, setLeadState] = useState<{ sending: boolean; error: string }>({ sending: false, error: '' });
+  const [proWall, setProWall] = useState<{ limit: number } | null>(null);
 
   // Envía el lead y recibe el informe completo (el servidor no lo entrega antes).
   async function unlockWith(data: LeadData, rep: AuditReport) {
@@ -71,6 +72,11 @@ export default function AuditClient() {
     try {
       const res = await fetch('/api/audit/lead', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...data, reportId: rep.id, report: rep.locked ? undefined : rep }) });
       const out = await res.json().catch(() => ({}));
+      if (res.status === 402 && out.code === 'FREE_LIMIT') {
+        setProWall({ limit: Number(out.limit) || 2 });
+        setLeadState({ sending: false, error: '' });
+        return;
+      }
       if (!res.ok) throw new Error(out.error ?? 'No se pudo enviar.');
       try { sessionStorage.setItem(LEAD_KEY, JSON.stringify(data)); } catch { /* sin almacenamiento */ }
       if (out.report && typeof out.report === 'object') {
@@ -99,7 +105,7 @@ export default function AuditClient() {
 
   async function run(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
-    setLoading(true); setError(''); setReport(null); setStep(0); setShareUrl(null);
+    setLoading(true); setError(''); setReport(null); setStep(0); setShareUrl(null); setProWall(null);
     try {
       const res = await fetch('/api/audit', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url }) });
       const data = await res.json();
@@ -257,7 +263,7 @@ export default function AuditClient() {
               <div key={b.title} className={`${s.issues} ${b.cls} ${s.lockedBlock}`}>
                 <h2>{b.title} <span>{b.n}</span></h2>
                 <div className={s.blurred} aria-hidden="true">{Array.from({ length: Math.min(b.n, 3) }).map((_, i) => <p key={i}><b>████████████ ███████</b> — ████ ██████████ ███ ████████ ██████ █████████.</p>)}</div>
-                <p className={s.lockNote}>🔒 Deja tus datos abajo para ver cuáles son y cómo solucionarlos.</p>
+                <p className={s.lockNote}>{proWall ? '🔒 Disponible con el Plan Pro.' : '🔒 Deja tus datos abajo para ver cuáles son y cómo solucionarlos.'}</p>
               </div>
             ));
           })()}
@@ -270,9 +276,25 @@ export default function AuditClient() {
             </div>
           ))}
 
-          {!unlocked && (
+          {!unlocked && proWall && (
+            <div className={s.proWall}>
+              <span className={s.proBadge}>PLAN PRO</span>
+              <h2>Has usado tus {proWall.limit} auditorías gratuitas</h2>
+              <p>Para seguir auditando webs (las tuyas o las de tus clientes), pásate al Plan Pro para agencias y profesionales:</p>
+              <ul>
+                <li>Auditorías ilimitadas con el informe completo</li>
+                <li>Informe PDF con tu marca, listo para entregar a tus clientes</li>
+                <li>Historial y evolución de cada web</li>
+              </ul>
+              <a href={`${AGENCY_CONTACT_URL}`}>Quiero el Plan Pro</a>
+              <p className={s.small}>¿Prefieres que mejoremos tu web nosotros? Reserva un diagnóstico gratuito con el mismo botón.</p>
+            </div>
+          )}
+
+          {!unlocked && !proWall && (
             <form className={s.gate} onSubmit={submitLead}>
               <h2>Desbloquea el informe completo</h2>
+              <p className={s.freeNote}>Gratis: hasta 2 auditorías completas por persona.</p>
               <p>Ve qué falla exactamente, cómo solucionarlo paso a paso y descarga el informe profesional en PDF ({report.categories.reduce((n, c) => n + (c.counts?.total ?? c.checks.length), 0)} aspectos analizados).</p>
               <div className={s.gateRow}>
                 <label>Nombre<input required minLength={2} maxLength={120} autoComplete="name" value={lead.name} onChange={(e) => setLead({ ...lead, name: e.target.value })} /></label>

@@ -35,3 +35,7 @@ npm run dev
 npm test
 ```
 Límite: 10 auditorías/hora por IP (en memoria por instancia).
+
+## Planes
+- **Gratis:** hasta `FREE_AUDITS_PER_EMAIL` (2) informes completos por email, siempre dejando datos. Reabrir un informe ya desbloqueado no consume cupo. A partir del límite se muestra el Plan Pro (`POST /api/audit/lead` responde 402 `FREE_LIMIT`).
+- **Pro (provisional):** emails en `SEO_PRO_EMAILS` (separados por comas) sin límite, hasta integrar el pago.
