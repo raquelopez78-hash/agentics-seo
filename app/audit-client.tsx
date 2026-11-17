@@ -7,7 +7,8 @@ import s from './audit.module.css';
 import ReportPrint from './report-print';
 import { AGENCY_CONTACT_URL, AGENCY_URL, LEGAL_LINKS } from '@/lib/site';
 
-const UNLOCK_KEY = 'agentics-seo-unlocked';
+const LEAD_KEY = 'agentics-seo-lead';
+type LeadData = { name: string; email: string; company: string; privacy: boolean; marketing: boolean };
 const HISTORY_KEY = 'agentics-seo-history';
 type HistoryEntry = { score: number; date: string };
 function compareWithHistory(r: AuditReport): { previous: HistoryEntry | null } {
@@ -22,7 +23,12 @@ function compareWithHistory(r: AuditReport): { previous: HistoryEntry | null } {
     return { previous: null };
   }
 }
-const readUnlocked = () => { try { return sessionStorage.getItem(UNLOCK_KEY) === '1'; } catch { return false; } };
+const readSavedLead = (): LeadData | null => {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(LEAD_KEY) ?? 'null') as LeadData | null;
+    return v && v.email && v.name && v.privacy ? v : null;
+  } catch { return null; }
+};
 
 const STEPS = ['Descargando la página', 'Leyendo robots.txt, sitemap y llms.txt', 'Analizando on-page y datos estructurados', 'Evaluando contenido y E-E-A-T', 'Calculando puntuación'];
 const STATUS_LABEL: Record<CheckStatus, string> = { pass: 'Correcto', warning: 'Mejorable', fail: 'Error', na: 'No aplica', no_api: 'Requiere IA', pending: 'Midiendo…' };
@@ -59,21 +65,30 @@ export default function AuditClient() {
   const [lead, setLead] = useState({ name: '', email: '', company: '', privacy: false, marketing: false });
   const [leadState, setLeadState] = useState<{ sending: boolean; error: string }>({ sending: false, error: '' });
 
-  async function submitLead(e: React.SyntheticEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!report) return;
+  // Envía el lead y recibe el informe completo (el servidor no lo entrega antes).
+  async function unlockWith(data: LeadData, rep: AuditReport) {
     setLeadState({ sending: true, error: '' });
     try {
-      const res = await fetch('/api/audit/lead', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...lead, reportId: report.id, report }) });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? 'No se pudo enviar.');
-      try { sessionStorage.setItem(UNLOCK_KEY, '1'); } catch { /* sin almacenamiento */ }
+      const res = await fetch('/api/audit/lead', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...data, reportId: rep.id, report: rep.locked ? undefined : rep }) });
+      const out = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(out.error ?? 'No se pudo enviar.');
+      try { sessionStorage.setItem(LEAD_KEY, JSON.stringify(data)); } catch { /* sin almacenamiento */ }
+      if (out.report && typeof out.report === 'object') {
+        const full = { ...(out.report as AuditReport), locked: false };
+        setReport(full);
+        setOpen(Object.fromEntries(full.categories.map((c) => [c.id, c.checks.some((k) => k.status === 'fail')])));
+      }
       setUnlocked(true);
-      if (typeof data.shareUrl === 'string') setShareUrl(data.shareUrl);
+      if (typeof out.shareUrl === 'string') setShareUrl(out.shareUrl);
       setLeadState({ sending: false, error: '' });
     } catch (err) {
       setLeadState({ sending: false, error: err instanceof Error ? err.message : 'No se pudo enviar.' });
     }
+  }
+
+  async function submitLead(e: React.SyntheticEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (report) await unlockWith(lead, report);
   }
 
   useEffect(() => {
@@ -92,9 +107,12 @@ export default function AuditClient() {
       const r = data as AuditReport;
       setReport(r);
       setPrevious(compareWithHistory(r).previous);
-      setUnlocked(readUnlocked());
       setOpen(Object.fromEntries(r.categories.map((c) => [c.id, c.checks.some((k) => k.status === 'fail')])));
+      const saved = readSavedLead();
+      setUnlocked(false);
       void loadPerformance(r);
+      // Misma visita: se reutilizan los datos ya dados y la nueva web queda registrada como lead.
+      if (saved) { setLead(saved); void unlockWith(saved, r); }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error en la auditoría.');
     } finally {
@@ -112,7 +130,8 @@ export default function AuditClient() {
       checks = [{ id: 'cwv', label: 'Core Web Vitals (PageSpeed)', status: 'na', message: 'No disponible.' }];
     }
     setReport((cur) => {
-      if (!cur || cur.finalUrl !== base.finalUrl) return cur;
+      // El adelanto no tiene detalle: PageSpeed ya se guarda en el servidor y llega al desbloquear.
+      if (!cur || cur.finalUrl !== base.finalUrl || cur.locked) return cur;
       const categories = cur.categories.map((c) => (c.id === 'performance' ? { ...c, checks: [...c.checks.filter((k) => k.status !== 'pending'), ...checks] } : c));
       return finalizeReport({ ...cur, categories });
     });
@@ -223,8 +242,8 @@ export default function AuditClient() {
                 <span>{i + 1}. {c.name}</span>
                 <b style={{ color: color(c.score) }}>{c.score === null ? '—' : Math.round(c.score)}</b>
                 {(() => {
-                  const f = c.checks.filter((k) => k.status === 'fail').length;
-                  const w = c.checks.filter((k) => k.status === 'warning').length;
+                  const f = c.counts?.fail ?? c.checks.filter((k) => k.status === 'fail').length;
+                  const w = c.counts?.warning ?? c.checks.filter((k) => k.status === 'warning').length;
                   return (f > 0 || w > 0) && <span className={s.badges}>{f > 0 && <em className={s.bFail} title={`${f} error(es)`}>{f}</em>}{w > 0 && <em className={s.bWarn} title={`${w} a mejorar`}>{w}</em>}</span>;
                 })()}
                 <i><em style={{ width: `${c.score ?? 0}%`, background: color(c.score) }} /></i>
@@ -232,7 +251,18 @@ export default function AuditClient() {
             ))}
           </nav>
 
-          {[{ title: 'Problemas principales', list: issues.fails, cls: s.fail }, { title: 'Aspectos a mejorar', list: issues.warns, cls: s.warn }].map((b) => b.list.length > 0 && (
+          {report.locked && (() => {
+            const totals = report.categories.reduce((acc, c) => ({ fail: acc.fail + (c.counts?.fail ?? 0), warning: acc.warning + (c.counts?.warning ?? 0) }), { fail: 0, warning: 0 });
+            return [{ title: 'Problemas principales', n: totals.fail, cls: s.fail }, { title: 'Aspectos a mejorar', n: totals.warning, cls: s.warn }].map((b) => b.n > 0 && (
+              <div key={b.title} className={`${s.issues} ${b.cls} ${s.lockedBlock}`}>
+                <h2>{b.title} <span>{b.n}</span></h2>
+                <div className={s.blurred} aria-hidden="true">{Array.from({ length: Math.min(b.n, 3) }).map((_, i) => <p key={i}><b>████████████ ███████</b> — ████ ██████████ ███ ████████ ██████ █████████.</p>)}</div>
+                <p className={s.lockNote}>🔒 Deja tus datos abajo para ver cuáles son y cómo solucionarlos.</p>
+              </div>
+            ));
+          })()}
+
+          {!report.locked && [{ title: 'Problemas principales', list: issues.fails, cls: s.fail }, { title: 'Aspectos a mejorar', list: issues.warns, cls: s.warn }].map((b) => b.list.length > 0 && (
             <div key={b.title} className={`${s.issues} ${b.cls}`}>
               <h2>{b.title} <span>{b.list.length}</span></h2>
               {b.list.slice(0, unlocked ? 12 : 3).map((k) => <p key={`${k.cat}-${k.id}`}><b>{k.label}</b> — {k.message} <small>{k.cat}</small></p>)}
@@ -243,7 +273,7 @@ export default function AuditClient() {
           {!unlocked && (
             <form className={s.gate} onSubmit={submitLead}>
               <h2>Desbloquea el informe completo</h2>
-              <p>Detalle de los {report.categories.reduce((n, c) => n + c.checks.length, 0)} aspectos analizados, cómo solucionar cada punto e informe profesional en PDF listo para compartir.</p>
+              <p>Ve qué falla exactamente, cómo solucionarlo paso a paso y descarga el informe profesional en PDF ({report.categories.reduce((n, c) => n + (c.counts?.total ?? c.checks.length), 0)} aspectos analizados).</p>
               <div className={s.gateRow}>
                 <label>Nombre<input required minLength={2} maxLength={120} autoComplete="name" value={lead.name} onChange={(e) => setLead({ ...lead, name: e.target.value })} /></label>
                 <label>Email<input required type="email" maxLength={254} autoComplete="email" value={lead.email} onChange={(e) => setLead({ ...lead, email: e.target.value })} /></label>
