@@ -31,7 +31,7 @@ export async function POST(request: Request) {
       const customerId = str(o.customer);
       const subscriptionId = str(o.id);
       if (customerId && subscriptionId) {
-        await updateSubscription({ customerId, subscriptionId, status: event.type === 'customer.subscription.deleted' ? 'canceled' : String(o.status), plan: planOf(o), periodEnd });
+        await updateSubscription({ customerId, subscriptionId, status: event.type === 'customer.subscription.deleted' ? 'canceled' : String(o.status), plan: planOf(o), periodEnd, cancelAtPeriodEnd: o.cancel_at_period_end === true || typeof o.cancel_at === 'number' });
       }
     }
   } catch (error) {

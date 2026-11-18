@@ -4,7 +4,7 @@ import { isPro as isEnvPro } from '@/lib/seo-audit/quota';
 import { PRO_ACTIVE_STATUSES } from './crypto';
 
 export type ProAccount = {
-  email: string; status: string; plan: string | null; currentPeriodEnd: string | null;
+  email: string; status: string; plan: string | null; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean;
   stripeCustomerId: string | null; brandName: string | null; brandLogo: string | null;
 };
 
@@ -13,7 +13,7 @@ const log = (error: unknown) => console.error('seo-audit pro', (error as { code?
 export async function getAccount(email: string): Promise<ProAccount | null> {
   if (!process.env.DATABASE_URL) return null;
   try {
-    const [row] = await pg()<ProAccount[]>`select email, status, plan, current_period_end::text as "currentPeriodEnd",
+    const [row] = await pg()<ProAccount[]>`select email, status, plan, current_period_end::text as "currentPeriodEnd", cancel_at_period_end as "cancelAtPeriodEnd",
       stripe_customer_id as "stripeCustomerId", brand_name as "brandName", brand_logo as "brandLogo"
       from seo_audit.pro_accounts where email = ${email.toLowerCase()}`;
     return row ?? null;
@@ -39,9 +39,9 @@ export async function upsertFromCheckout(a: { email: string; customerId: string;
 }
 
 /** Cambio de estado de la suscripción (renovación, impago, cancelación). */
-export async function updateSubscription(s: { customerId: string; subscriptionId: string; status: string; plan: string | null; periodEnd: number | null }) {
+export async function updateSubscription(s: { customerId: string; subscriptionId: string; status: string; plan: string | null; periodEnd: number | null; cancelAtPeriodEnd: boolean }) {
   await pg()`update seo_audit.pro_accounts set stripe_subscription_id = ${s.subscriptionId}, status = ${s.status},
-    plan = coalesce(${s.plan}, plan), current_period_end = ${s.periodEnd ? new Date(s.periodEnd * 1000) : null}, updated_at = now()
+    plan = coalesce(${s.plan}, plan), current_period_end = ${s.periodEnd ? new Date(s.periodEnd * 1000) : null}, cancel_at_period_end = ${s.cancelAtPeriodEnd}, updated_at = now()
     where stripe_customer_id = ${s.customerId}`;
 }
 

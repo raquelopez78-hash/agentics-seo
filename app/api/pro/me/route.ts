@@ -18,6 +18,7 @@ export async function GET(request: Request) {
     status: account?.status ?? (active ? 'manual' : 'inactive'),
     plan: account?.plan ?? null,
     currentPeriodEnd: account?.currentPeriodEnd ?? null,
+    cancelAtPeriodEnd: account?.cancelAtPeriodEnd ?? false,
     canManageBilling: !!account?.stripeCustomerId,
     brand: { name: account?.brandName ?? null, logo: account?.brandLogo ?? null },
     history: withHistory && active ? await listHistory(email) : undefined,
