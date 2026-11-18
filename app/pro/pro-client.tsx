@@ -7,7 +7,7 @@ import a from '../audit.module.css';
 import s from './pro.module.css';
 
 type Me = {
-  pro: boolean; email: string; status: string; plan: string | null; currentPeriodEnd: string | null; canManageBilling: boolean;
+  pro: boolean; email: string; status: string; plan: string | null; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; canManageBilling: boolean;
   brand: { name: string | null; logo: string | null };
   history?: { id: string; host: string; finalUrl: string; score: number; createdAt: string }[];
 };
@@ -41,8 +41,9 @@ export default function ProClient({ prices, features, payments, login }: Props) 
       if (d) setBrand({ name: d.brand.name ?? '', logo: d.brand.logo });
       setLoaded(true);
       const q = new URLSearchParams(window.location.search);
+      if (q.size) window.history.replaceState(null, '', '/pro');
       if (q.get('pago') === 'ok') setMsg({ ok: true, text: '¡Pago completado! Bienvenido al Plan Pro. Para entrar otro día, pide el enlace con el email que usaste al pagar.' });
-      if (q.get('acceso') === 'caducado') setMsg({ ok: false, text: 'El enlace ha caducado o ya se usó. Pide uno nuevo.' });
+      if (q.get('acceso') === 'caducado' && !d?.pro) setMsg({ ok: false, text: 'El enlace ha caducado o ya se usó. Pide uno nuevo.' });
     });
   }, []);
 
@@ -90,7 +91,7 @@ export default function ProClient({ prices, features, payments, login }: Props) 
           <section className={s.account}>
             <div className={s.card}>
               <h2>Tu cuenta Pro</h2>
-              <p><b>{me.email}</b> · Suscripción: <b>{STATUS[me.status] ?? me.status}</b>{me.plan ? ` · ${me.plan === 'yearly' ? 'anual' : 'mensual'}` : ''}{me.currentPeriodEnd ? ` · renueva el ${new Date(me.currentPeriodEnd).toLocaleDateString('es-ES')}` : ''}</p>
+              <p><b>{me.email}</b> · Suscripción: <b>{STATUS[me.status] ?? me.status}</b>{me.plan ? ` · ${me.plan === 'yearly' ? 'anual' : 'mensual'}` : ''}{me.currentPeriodEnd && me.status !== 'canceled' ? ` · ${me.cancelAtPeriodEnd ? 'cancelada, acceso hasta el' : 'renueva el'} ${new Date(me.currentPeriodEnd).toLocaleDateString('es-ES')}` : ''}</p>
               <div className={s.row}>
                 <Link className={s.primary} href="/">Nueva auditoría</Link>
                 {me.canManageBilling && <button type="button" onClick={portal} disabled={saving('portal')}>Facturas, tarjeta o cancelar</button>}
