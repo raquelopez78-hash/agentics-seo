@@ -6,7 +6,7 @@ import { CATEGORY_NAMES, finalizeReport, reportToMarkdown, type AuditCheck, type
 import { LEAD_PRIVACY_NOTICE } from '@/lib/seo-audit/lead';
 import s from './audit.module.css';
 import ReportPrint, { type Brand } from './report-print';
-import { AGENCY_CONTACT_URL, AGENCY_URL, LEGAL_LINKS, REVIEW_URL } from '@/lib/site';
+import { AGENCY_CONTACT_URL, AGENCY_URL, LEGAL_LINKS, REVIEW_URL, SECURITY_URL } from '@/lib/site';
 
 const LEAD_KEY = 'agentics-seo-lead';
 type LeadData = { name: string; email: string; company: string; privacy: boolean; marketing: boolean };
@@ -368,12 +368,20 @@ export default function AuditClient() {
             </div>
             <a href={AGENCY_CONTACT_URL}>Reservar diagnóstico gratuito</a>
           </div>
+          <div className={s.crossSell}>
+            <div>
+              <h2>🛡️ Comprueba también tu seguridad</h2>
+              <p>Un buen SEO no sirve de nada si tu web es vulnerable. Analiza gratis HTTPS, cabeceras, cookies, archivos expuestos y protección contra la suplantación de tu email.</p>
+            </div>
+            <a href={`${SECURITY_URL}/?url=${encodeURIComponent(new URL(report.finalUrl).hostname)}`} target="_blank" rel="noopener">Analizar seguridad gratis</a>
+          </div>
         </section>
       )}
     </div>
     <footer className={s.siteFooter}>
       <a href={AGENCY_URL}>◆ Agentics Projects</a>
       <span>Agentes de IA, automatización y marketing digital</span>
+      <a className={s.footerTool} href={SECURITY_URL}>Auditoría de seguridad gratis</a>
       <nav aria-label="Legal">{LEGAL_LINKS.map((l) => <a key={l.href} href={l.href}>{l.label}</a>)}</nav>
     </footer>
     {report && unlocked && <ReportPrint report={report} preparedFor={pro ? undefined : lead.company || lead.name || undefined} brand={pro?.brand} />}
