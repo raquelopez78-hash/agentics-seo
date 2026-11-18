@@ -5,7 +5,7 @@ import { PRO_ACTIVE_STATUSES } from './crypto';
 
 export type ProAccount = {
   email: string; status: string; plan: string | null; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean;
-  stripeCustomerId: string | null; brandName: string | null; brandLogo: string | null;
+  stripeCustomerId: string | null; brandName: string | null; brandLogo: string | null; brandContact: string | null;
 };
 
 const log = (error: unknown) => console.error('seo-audit pro', (error as { code?: string })?.code ?? error);
@@ -14,7 +14,7 @@ export async function getAccount(email: string): Promise<ProAccount | null> {
   if (!process.env.DATABASE_URL) return null;
   try {
     const [row] = await pg()<ProAccount[]>`select email, status, plan, current_period_end::text as "currentPeriodEnd", cancel_at_period_end as "cancelAtPeriodEnd",
-      stripe_customer_id as "stripeCustomerId", brand_name as "brandName", brand_logo as "brandLogo"
+      stripe_customer_id as "stripeCustomerId", brand_name as "brandName", brand_logo as "brandLogo", brand_contact as "brandContact"
       from seo_audit.pro_accounts where email = ${email.toLowerCase()}`;
     return row ?? null;
   } catch (error) { log(error); return null; }
@@ -45,10 +45,10 @@ export async function updateSubscription(s: { customerId: string; subscriptionId
     where stripe_customer_id = ${s.customerId}`;
 }
 
-export async function setBrand(email: string, brandName: string | null, brandLogo: string | null) {
+export async function setBrand(email: string, brandName: string | null, brandLogo: string | null, brandContact: string | null) {
   // Los emails con acceso manual pueden no tener fila: se crea una sin suscripción.
-  await pg()`insert into seo_audit.pro_accounts (email, brand_name, brand_logo) values (${email.toLowerCase()}, ${brandName}, ${brandLogo})
-    on conflict (email) do update set brand_name = excluded.brand_name, brand_logo = excluded.brand_logo, updated_at = now()`;
+  await pg()`insert into seo_audit.pro_accounts (email, brand_name, brand_logo, brand_contact) values (${email.toLowerCase()}, ${brandName}, ${brandLogo}, ${brandContact})
+    on conflict (email) do update set brand_name = excluded.brand_name, brand_logo = excluded.brand_logo, brand_contact = excluded.brand_contact, updated_at = now()`;
 }
 
 export type HistoryItem = { id: string; host: string; finalUrl: string; score: number; createdAt: string };

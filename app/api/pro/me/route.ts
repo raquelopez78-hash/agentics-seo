@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     currentPeriodEnd: account?.currentPeriodEnd ?? null,
     cancelAtPeriodEnd: account?.cancelAtPeriodEnd ?? false,
     canManageBilling: !!account?.stripeCustomerId,
-    brand: { name: account?.brandName ?? null, logo: account?.brandLogo ?? null },
+    brand: { name: account?.brandName ?? null, logo: account?.brandLogo ?? null, contact: account?.brandContact ?? null },
     history: withHistory && active ? await listHistory(email) : undefined,
   });
 }

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { mailerEnabled } from '@/lib/pro/mailer';
-import { PRO_FEATURES, PRO_PRICES } from '@/lib/pro/plans';
+import { PRO_FAQ, PRO_FEATURES, PRO_PRICES, REPORT_BLOCKS } from '@/lib/pro/plans';
 import { stripeEnabled } from '@/lib/pro/stripe';
 import ProClient from './pro-client';
 
@@ -13,5 +13,5 @@ export const metadata: Metadata = {
 };
 
 export default function ProPage() {
-  return <ProClient prices={PRO_PRICES} features={PRO_FEATURES} payments={stripeEnabled()} login={mailerEnabled() && !!process.env.SESSION_SECRET} />;
+  return <ProClient prices={PRO_PRICES} features={PRO_FEATURES} blocks={REPORT_BLOCKS} faq={PRO_FAQ} payments={stripeEnabled()} login={mailerEnabled() && !!process.env.SESSION_SECRET} />;
 }

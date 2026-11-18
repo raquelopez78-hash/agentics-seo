@@ -59,3 +59,17 @@ export async function unlockReport(id: string) {
     console.error('seo-audit reports', (error as { code?: string })?.code ?? error);
   }
 }
+
+/** Informe de ejemplo para /pro/ejemplo: la auditoría más reciente de la web de la agencia (preferiblemente con IA). */
+export async function loadSampleReport(): Promise<AuditReport | null> {
+  if (!enabled()) return null;
+  try {
+    const rows = await pg()<{ report: AuditReport }[]>`select report from seo_audit.reports
+      where host in ('www.agenticsprojects.com', 'agenticsprojects.com')
+      order by (report->'ai'->>'enabled' = 'true') desc, created_at desc limit 1`;
+    return rows[0]?.report ?? null;
+  } catch (error) {
+    console.error('seo-audit reports', (error as { code?: string })?.code ?? error);
+    return null;
+  }
+}
