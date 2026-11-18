@@ -1,7 +1,7 @@
 const env = process.env as Record<string, string | undefined>;
 
 // Cliente de IA común: Claude como motor principal y GPT (OpenAI) como respaldo automático.
-// Ambos devuelven datos estructurados según un JSON Schema (herramienta forzada en Claude,
+// Ambos devuelven datos estructurados según un JSON Schema (output_config.format en Claude,
 // json_schema strict en OpenAI). Si ninguno está configurado o fallan los dos, lanza AiUnavailableError.
 
 export type AiEngine = 'claude' | 'openai' | 'basic';
@@ -32,8 +32,10 @@ export function aiStatus() {
 
 export class AiUnavailableError extends Error {
   readonly status = 503;
-  constructor(readonly failures: string[]) {
+  readonly failures: string[];
+  constructor(failures: string[]) {
     super(failures.length ? `La IA no respondió (${failures.join(' · ')}).` : 'IA no configurada: añade ANTHROPIC_API_KEY u OPENAI_API_KEY en el hosting.');
+    this.failures = failures;
   }
 }
 
@@ -71,23 +73,25 @@ async function postJson(url: string, headers: Record<string, string>, body: unkn
 }
 
 async function callClaude(request: StructuredRequest, config: ReturnType<typeof aiConfig>['claude']) {
+  // Salida estructurada con output_config.format (los modelos actuales rechazan tool_choice forzado).
   const payload = await postJson(
     `${config.baseUrl}/v1/messages`,
     { 'x-api-key': config.apiKey, 'anthropic-version': '2023-06-01' },
     {
       model: config.model,
-      max_tokens: request.maxTokens ?? 2000,
+      max_tokens: Math.max(request.maxTokens ?? 2000, 8000),
       system: request.system,
-      tools: [{ name: request.name, description: 'Registra el resultado estructurado.', input_schema: request.schema }],
-      tool_choice: { type: 'tool', name: request.name },
+      output_config: { effort: 'low', format: { type: 'json_schema', schema: request.schema } },
       messages: [{ role: 'user', content: request.user }],
     },
     request.timeoutMs ?? 30_000,
   );
-  const content = payload.content as { type: string; input?: unknown }[] | undefined;
-  const block = content?.find((item) => item.type === 'tool_use');
-  if (!block?.input) throw new Error('respuesta sin datos estructurados');
-  return block.input;
+  if (payload.stop_reason === 'refusal') throw new Error('el modelo rechazó la petición');
+  if (payload.stop_reason === 'max_tokens') throw new Error('respuesta truncada');
+  const content = payload.content as { type: string; text?: string }[] | undefined;
+  const text = content?.find((item) => item.type === 'text')?.text;
+  if (!text) throw new Error('respuesta sin datos estructurados');
+  return JSON.parse(text) as unknown;
 }
 
 async function callOpenAI(request: StructuredRequest, config: ReturnType<typeof aiConfig>['openai']) {

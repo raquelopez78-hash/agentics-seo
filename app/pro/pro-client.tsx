@@ -8,10 +8,10 @@ import s from './pro.module.css';
 
 type Me = {
   pro: boolean; email: string; status: string; plan: string | null; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; canManageBilling: boolean;
-  brand: { name: string | null; logo: string | null };
+  brand: { name: string | null; logo: string | null; contact: string | null };
   history?: { id: string; host: string; finalUrl: string; score: number; createdAt: string }[];
 };
-type Props = { prices: { monthly: number; yearly: number }; features: string[]; payments: boolean; login: boolean };
+type Props = { prices: { monthly: number; yearly: number }; features: string[]; blocks: { title: string; text: string }[]; faq: { q: string; a: string }[]; payments: boolean; login: boolean };
 
 const STATUS: Record<string, string> = { active: 'Activa', trialing: 'En prueba', past_due: 'Pago pendiente', canceled: 'Cancelada', manual: 'Acceso manual', inactive: 'Inactiva' };
 const tone = (n: number) => (n >= 75 ? '#2fd28b' : n >= 55 ? '#f5b740' : '#ff4d6d');
@@ -26,19 +26,19 @@ async function resizeLogo(file: File): Promise<string> {
   return c.toDataURL('image/png');
 }
 
-export default function ProClient({ prices, features, payments, login }: Props) {
+export default function ProClient({ prices, features, blocks, faq, payments, login }: Props) {
   const [me, setMe] = useState<Me | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [email, setEmail] = useState('');
-  const [brand, setBrand] = useState<{ name: string; logo: string | null }>({ name: '', logo: null });
+  const [brand, setBrand] = useState<{ name: string; logo: string | null; contact: string }>({ name: '', logo: null, contact: '' });
   const saving = (k: string) => busy === k;
 
   useEffect(() => {
     void fetch('/api/pro/me?history=1').then((r) => (r.ok ? (r.json() as Promise<Me>) : null)).catch(() => null).then((d) => {
       setMe(d);
-      if (d) setBrand({ name: d.brand.name ?? '', logo: d.brand.logo });
+      if (d) setBrand({ name: d.brand.name ?? '', logo: d.brand.logo, contact: d.brand.contact ?? '' });
       setLoaded(true);
       const q = new URLSearchParams(window.location.search);
       if (q.size) window.history.replaceState(null, '', '/pro');
@@ -64,7 +64,7 @@ export default function ProClient({ prices, features, payments, login }: Props) 
   const sendLink = (e: React.SyntheticEvent<HTMLFormElement>) => { e.preventDefault(); void act('login', async () => { setMsg({ ok: true, text: (await post('/api/pro/login', { email })).message ?? '' }); }); };
   const portal = () => act('portal', async () => { window.location.href = (await post('/api/pro/portal')).url ?? '/pro'; });
   const logout = () => act('logout', async () => { await post('/api/pro/logout'); setMe(null); });
-  const saveBrand = () => act('brand', async () => { await post('/api/pro/brand', { name: brand.name, logo: brand.logo }); setMsg({ ok: true, text: 'Marca guardada. Tus próximos PDF saldrán con ella.' }); });
+  const saveBrand = () => act('brand', async () => { await post('/api/pro/brand', { name: brand.name, logo: brand.logo, contact: brand.contact }); setMsg({ ok: true, text: 'Marca guardada. Tus próximos PDF saldrán con ella.' }); });
   async function pickLogo(file?: File) {
     if (!file) return;
     try { setBrand((b) => ({ ...b, logo: null })); const logo = await resizeLogo(file); setBrand((b) => ({ ...b, logo })); }
@@ -101,9 +101,10 @@ export default function ProClient({ prices, features, payments, login }: Props) 
 
             <div className={s.card}>
               <h2>Tu marca en el PDF</h2>
-              <p>Sustituye la marca AGENTICS por la tuya en los informes que descargues.</p>
+              <p>Sustituye la marca AGENTICS por la tuya en los informes que descargues. <Link href="/pro/ejemplo">Ver cómo queda</Link>.</p>
               <div className={s.brandRow}>
                 <label>Nombre de tu marca<input value={brand.name} maxLength={80} onChange={(e) => setBrand({ ...brand, name: e.target.value })} placeholder="Tu agencia" /></label>
+                <label>Datos de contacto (pie del PDF)<input value={brand.contact} maxLength={160} onChange={(e) => setBrand({ ...brand, contact: e.target.value })} placeholder="hola@tuagencia.com · tuagencia.com · 600 000 000" /></label>
                 <label>Logo (PNG, JPG o WebP)<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => void pickLogo(e.target.files?.[0])} /></label>
               </div>
               {/* oxlint-disable-next-line next/no-img-element -- data URL del logo */}
@@ -145,8 +146,21 @@ export default function ProClient({ prices, features, payments, login }: Props) 
                 <button type="button" className={s.primary} disabled={!payments || !!busy} onClick={() => void checkout('yearly')}>{saving('yearly') ? 'Abriendo pago…' : 'Empezar ahora'}</button>
               </div>
               <ul className={s.features}>{features.map((f) => <li key={f}>✓ {f}</li>)}</ul>
+              <p className={s.sampleLink}><Link href="/pro/ejemplo">Ver un ejemplo de informe con marca propia →</Link></p>
               {!payments && <p className={s.small}>El pago online se activará en breve. Mientras tanto, <a href={AGENCY_CONTACT_URL}>escríbenos</a> y te damos acceso.</p>}
-              <p className={s.small}>Pago seguro con Stripe. Recibirás la factura por email.</p>
+              <p className={s.small}>Pago seguro con Stripe. Facturas descargables desde tu cuenta. Sin permanencia.</p>
+            </section>
+
+            <section className={s.card}>
+              <h2>Qué incluye cada informe</h2>
+              <p>Más de 100 comprobaciones automáticas, con nota de 0 a 100 por área y la solución recomendada para cada problema.</p>
+              <div className={s.blocks}>{blocks.map((b) => <div key={b.title}><h3>{b.title}</h3><p>{b.text}</p></div>)}</div>
+              <div className={s.row}><Link className={s.primary} href="/pro/ejemplo">Ver ejemplo de informe con marca propia</Link></div>
+            </section>
+
+            <section className={s.card}>
+              <h2>Preguntas frecuentes</h2>
+              {faq.map((f) => <details key={f.q} className={s.faq}><summary>{f.q}</summary><p>{f.a}</p></details>)}
             </section>
 
             <section className={s.card}>

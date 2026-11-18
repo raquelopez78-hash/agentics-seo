@@ -37,3 +37,24 @@ void test('token de acceso y logo', () => {
   assert.equal(isValidLogo('https://x.com/logo.png'), false);
   assert.equal(isValidLogo(`data:image/png;base64,${'A'.repeat(210_000)}`), false);
 });
+
+void test('IA: Claude usa salida estructurada (sin tool_choice forzado) y lee el JSON del texto', async () => {
+  process.env.ANTHROPIC_API_KEY = 'test';
+  let sent: Record<string, unknown> = {};
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (_url: string, init: { body: string }) => {
+    sent = JSON.parse(init.body) as Record<string, unknown>;
+    return new Response(JSON.stringify({ stop_reason: 'end_turn', content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: '{"ok":true}' }] }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const { runStructured } = await import('../lib/ai-client.ts');
+    const out = await runStructured({ name: 'x', system: 's', user: 'u', schema: { type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'], additionalProperties: false } });
+    assert.deepEqual(out.data, { ok: true });
+    assert.equal(out.engine, 'claude');
+    assert.equal('tool_choice' in sent, false);
+    assert.equal((sent.output_config as { format: { type: string } }).format.type, 'json_schema');
+  } finally {
+    globalThis.fetch = original;
+    delete process.env.ANTHROPIC_API_KEY;
+  }
+});

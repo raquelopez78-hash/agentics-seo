@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { CATEGORY_NAMES, finalizeReport, reportToMarkdown, type AuditCheck, type AuditReport, type CheckStatus } from '@/lib/seo-audit/scoring';
 import { LEAD_PRIVACY_NOTICE } from '@/lib/seo-audit/lead';
 import s from './audit.module.css';
-import ReportPrint from './report-print';
+import ReportPrint, { type Brand } from './report-print';
 import { AGENCY_CONTACT_URL, AGENCY_URL, LEGAL_LINKS, REVIEW_URL } from '@/lib/site';
 
 const LEAD_KEY = 'agentics-seo-lead';
@@ -66,10 +66,10 @@ export default function AuditClient() {
   const [lead, setLead] = useState({ name: '', email: '', company: '', privacy: false, marketing: false });
   const [leadState, setLeadState] = useState<{ sending: boolean; error: string }>({ sending: false, error: '' });
   const [proWall, setProWall] = useState<{ limit: number } | null>(null);
-  const [pro, setPro] = useState<{ email: string; brand: { name: string | null; logo: string | null } } | null>(null);
+  const [pro, setPro] = useState<{ email: string; brand: Brand } | null>(null);
 
   useEffect(() => {
-    fetch('/api/pro/me').then((r) => (r.ok ? r.json() : null)).then((d: { pro?: boolean; email: string; brand: { name: string | null; logo: string | null } } | null) => {
+    fetch('/api/pro/me').then((r) => (r.ok ? r.json() : null)).then((d: { pro?: boolean; email: string; brand: Brand } | null) => {
       if (d?.pro) setPro({ email: d.email, brand: d.brand });
     }).catch(() => {});
   }, []);
@@ -161,7 +161,7 @@ export default function AuditClient() {
 
   function printPdf(r: AuditReport) {
     const previous = document.title;
-    document.title = `Informe-SEO-${new URL(r.finalUrl).hostname}`;
+    document.title = `${pro?.brand.name ? `${pro.brand.name.replace(/[^\p{L}\p{N}]+/gu, '-')}-` : ''}Informe-SEO-${new URL(r.finalUrl).hostname}`;
     const restore = () => { document.title = previous; window.removeEventListener('afterprint', restore); };
     window.addEventListener('afterprint', restore);
     window.print();
