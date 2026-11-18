@@ -1,6 +1,8 @@
 // Dominio público de la auditoría y web de la agencia (subdominio auditoria.agenticsprojects.com por defecto).
 export const SITE_URL = (process.env.SITE_URL || 'https://auditoria.agenticsprojects.com').replace(/\/$/, '');
 export const AGENCY_URL = 'https://www.agenticsprojects.com';
+// Escáner de seguridad hermano (repo agentics-security-).
+export const SECURITY_URL = 'https://security.agenticsprojects.com';
 export const AGENCY_CONTACT_URL = `${AGENCY_URL}/#contacto`;
 export const LEGAL_LINKS = [
   { label: 'Aviso legal', href: `${AGENCY_URL}/legal.html#aviso-legal` },
