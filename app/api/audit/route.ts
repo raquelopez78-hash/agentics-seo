@@ -1,4 +1,5 @@
 import { analyzeWithAi } from '@/lib/seo-audit/ai';
+import { checkWebRisk } from '@/lib/seo-audit/webrisk';
 import { pageBasics, runChecks } from '@/lib/seo-audit/checks';
 import { recordAudit } from '@/lib/seo-audit/counter';
 import { isActivePro } from '@/lib/pro/accounts';
@@ -31,7 +32,8 @@ export async function POST(request: Request) {
   try {
     const page = await fetchPage(url);
     const categories = runChecks(page);
-    const ai = await analyzeWithAi({ url: page.finalUrl, ...pageBasics(page.html) });
+    const [ai, webRisk] = await Promise.all([analyzeWithAi({ url: page.finalUrl, ...pageBasics(page.html) }), checkWebRisk(page.finalUrl)]);
+    categories.find((c) => c.id === 'trust_eeat')?.checks.unshift(webRisk);
     for (const cat of categories) cat.checks.push(...(ai.checks[cat.id] ?? []));
     const report = finalizeReport({
       url: page.url,

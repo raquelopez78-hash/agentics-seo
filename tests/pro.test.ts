@@ -75,3 +75,17 @@ void test('correos a leads: escapado, asunto y enlace de baja', async () => {
   assert.equal(verifyUnsubscribe('11111111-1111-1111-1111-111111111111', t, 's'), true);
   assert.equal(verifyUnsubscribe('22222222-2222-2222-2222-222222222222', t, 's'), false);
 });
+
+void test('Web Risk: limpia, peligrosa, error y sin clave', async () => {
+  const { checkWebRisk } = await import('../lib/seo-audit/webrisk.ts');
+  const fake = (status: number, body: unknown) => (async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch;
+  delete process.env.WEBRISK_API_KEY; delete process.env.PAGESPEED_API_KEY;
+  assert.equal((await checkWebRisk('https://a.com/', fake(200, {}))).status, 'na');
+  process.env.WEBRISK_API_KEY = 'k';
+  assert.equal((await checkWebRisk('https://a.com/', fake(200, {}))).status, 'pass');
+  const bad = await checkWebRisk('https://a.com/', fake(200, { threat: { threatTypes: ['MALWARE', 'SOCIAL_ENGINEERING'] } }));
+  assert.equal(bad.status, 'fail');
+  assert.match(bad.message, /software malicioso, suplantación/);
+  assert.equal((await checkWebRisk('https://a.com/', fake(403, { error: {} }))).status, 'na');
+  delete process.env.WEBRISK_API_KEY;
+});
