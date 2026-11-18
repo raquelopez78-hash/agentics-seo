@@ -1,3 +1,5 @@
+> **Correos a leads: ya los envía la propia web** (informe al momento, aviso de lead nuevo, seguimiento a los 3 días y petición de reseña, con la tarea diaria de Vercel `/api/cron/emails`). Los workflows `seo-audit-followup.json` y `seo-audit-review-request.json` quedan solo como alternativa: **no los actives** si la web ya envía los correos. n8n sigue siendo útil para sincronizar los leads con Airtable.
+
 # n8n · Leads de la auditoría → Airtable + Gmail
 
 1. **Airtable:** crea una tabla `Leads auditoría SEO` con estas columnas (tipo sugerido):

@@ -37,7 +37,7 @@ ${button(link(d.reportUrl), 'Ver mi informe')}
   };
 }
 
-/** A los 2-3 días: seguimiento con propuesta de videollamada. */
+/** A los 3 días: seguimiento con propuesta de videollamada. */
 export function followupMail(d: LeadMailData): Built {
   const host = hostOf(d.auditedUrl);
   const n = nota(d.score);
@@ -48,9 +48,9 @@ export function followupMail(d: LeadMailData): Built {
   return {
     to: d.email,
     subject: `${firstName(d.name)}, ¿pudiste revisar la auditoría de ${host}?`,
-    text: `Hola ${firstName(d.name)}:\n\nHace un par de días auditaste ${host}${n ? ` y obtuvo ${n}/100` : ''}. Si quieres, lo revisamos juntos en una videollamada de 20 minutos, gratis y sin compromiso: ${CONTACT}\n\nTu informe: ${link(d.reportUrl)}\n\nRaquel López · Agentics Projects`,
+    text: `Hola ${firstName(d.name)}:\n\nHace unos días auditaste ${host}${n ? ` y obtuvo ${n}/100` : ''}. Si quieres, lo revisamos juntos en una videollamada de 20 minutos, gratis y sin compromiso: ${CONTACT}\n\nTu informe: ${link(d.reportUrl)}\n\nRaquel López · Agentics Projects`,
     html: wrap(`<p>Hola ${esc(firstName(d.name))}:</p>
-<p>Hace un par de días auditaste <b>${esc(host)}</b> con nuestra herramienta${n ? ` y obtuvo <b>${n}/100</b>` : ''}.</p>
+<p>Hace unos días auditaste <b>${esc(host)}</b> con nuestra herramienta${n ? ` y obtuvo <b>${n}/100</b>` : ''}.</p>
 ${destacado}
 <p>Muchas de estas mejoras se resuelven rápido, pero cuesta saber por dónde empezar y qué impacto tiene cada una. Si quieres, lo revisamos juntos en una videollamada de 20 minutos, gratis y sin compromiso: te digo qué arreglar primero y por qué.</p>
 ${button(CONTACT, 'Reservar 20 minutos')}
@@ -93,6 +93,6 @@ export function newLeadNotice(d: LeadMailData, to: string): Built {
 </table>
 ${issues ? `<p style="margin-top:14px"><b>Principales problemas</b></p><ul>${issues}</ul>` : ''}
 ${button(link(d.reportUrl), 'Ver su informe')}
-<p style="font-size:12px;color:#64748b">Recibirá el seguimiento a los 2-3 días y la petición de reseña unos días después, automáticamente.</p>`),
+<p style="font-size:12px;color:#64748b">Recibirá el seguimiento a los 3 días y la petición de reseña unos días después, automáticamente.</p>`),
   };
 }

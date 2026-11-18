@@ -25,7 +25,7 @@ const toData = (r: Row): LeadMailData => ({
   topIssues: Array.isArray(r.top_issues) ? (r.top_issues as LeadMailData['topIssues']) : [], reportUrl: r.report_url, unsubscribeUrl: unsubscribeUrl(r.id),
 });
 
-/** Tarea diaria: seguimientos (2-14 días) y peticiones de reseña. Cada lead se reclama antes de enviar; si falla, se libera. */
+/** Tarea diaria: seguimientos (3-14 días) y peticiones de reseña. Cada lead se reclama antes de enviar; si falla, se libera. */
 export async function runScheduledMails(limit = 20) {
   const out = { followups: 0, reviews: 0, failed: 0 };
   if (!mailerEnabled() || !process.env.DATABASE_URL) return out;
@@ -33,7 +33,7 @@ export async function runScheduledMails(limit = 20) {
   const followups = await sql<Row[]>`update seo_audit.leads l set followup_sent_at = now()
     where l.id in (select id from seo_audit.leads
       where followup_sent_at is null and unsubscribed_at is null
-        and created_at < now() - interval '2 days' and created_at > now() - interval '14 days'
+        and created_at < now() - interval '3 days' and created_at > now() - interval '14 days'
       order by created_at limit ${limit} for update skip locked)
     returning l.id, l.name, l.email, l.audited_url, l.score::float as score, l.warnings, l.top_issues, l.report_url`;
   for (const r of followups) {
