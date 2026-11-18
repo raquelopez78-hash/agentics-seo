@@ -58,3 +58,20 @@ void test('IA: Claude usa salida estructurada (sin tool_choice forzado) y lee el
     delete process.env.ANTHROPIC_API_KEY;
   }
 });
+
+void test('correos a leads: escapado, asunto y enlace de baja', async () => {
+  const { followupMail, reviewMail, reportMail, newLeadNotice } = await import('../lib/seo-audit/emails.ts');
+  const d = { name: 'Ana <b>López</b>', email: 'ana@ej.com', auditedUrl: 'https://ej.com/', score: 66.3, warnings: 3, reportUrl: 'https://auditoria.agenticsprojects.com/r/abc', unsubscribeUrl: 'https://x/api/unsubscribe?id=1&t=2',
+    topIssues: [{ label: 'Cabeceras <script>', message: 'Faltan', category: 'Confianza' }] };
+  const f = followupMail(d);
+  assert.equal(f.subject, 'Ana, ¿pudiste revisar la auditoría de ej.com?');
+  assert.ok(!f.html.includes('<script>') && f.html.includes('&lt;script&gt;'));
+  assert.ok(f.html.includes('date de baja aquí') && f.html.includes('66/100'));
+  assert.ok(reviewMail(d, 'https://g.page/r/x/review').html.includes('https://g.page/r/x/review'));
+  assert.equal(reportMail(d).subject, 'Tu informe SEO de ej.com: 66/100');
+  assert.ok(newLeadNotice(d, 'yo@ej.com').html.includes('No acepta comunicaciones'));
+  const { unsubscribeToken, verifyUnsubscribe } = await import('../lib/pro/crypto.ts');
+  const t = unsubscribeToken('11111111-1111-1111-1111-111111111111', 's');
+  assert.equal(verifyUnsubscribe('11111111-1111-1111-1111-111111111111', t, 's'), true);
+  assert.equal(verifyUnsubscribe('22222222-2222-2222-2222-222222222222', t, 's'), false);
+});

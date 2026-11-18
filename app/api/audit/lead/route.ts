@@ -3,6 +3,7 @@ import { pg } from '@/db/pg';
 import { LEAD_PRIVACY_VERSION, LeadInputError, parseLead, type Lead } from '@/lib/seo-audit/lead';
 import { clientIp, rateLimited } from '@/lib/seo-audit/rate-limit';
 import { checkFreeQuota } from '@/lib/seo-audit/quota';
+import { sendLeadMails } from '@/lib/seo-audit/lead-mails';
 import { isValidReportId, loadReport, reportUrl, unlockReport } from '@/lib/seo-audit/reports';
 
 export const dynamic = 'force-dynamic';
@@ -72,6 +73,11 @@ export async function POST(request: Request) {
     }
   }
   if (!stored && webhook !== 'sent') return json({ error: 'No se pudo registrar tu solicitud. Inténtalo de nuevo en unos minutos.' }, 503);
+  // Informe al lead y aviso interno (no bloquean la respuesta si fallan).
+  await sendLeadMails(id, {
+    name: lead.name, email: lead.email, company: lead.company, auditedUrl: lead.auditedUrl, score: lead.score, grade: lead.grade,
+    fails: lead.fails, warnings: lead.warnings, topIssues: lead.topIssues, reportUrl: shareUrl ?? '', marketing: lead.marketing,
+  });
   if (reportId) {
     await unlockReport(reportId);
     // Versión más reciente (puede incluir ya los datos de PageSpeed).

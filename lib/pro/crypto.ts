@@ -50,3 +50,7 @@ export function isValidLogo(v: unknown): v is string {
 }
 
 export const PRO_ACTIVE_STATUSES = ['active', 'trialing', 'past_due'];
+
+/** Token de baja de correos: HMAC del id del lead (sin caducidad, no revela nada). */
+export const unsubscribeToken = (leadId: string, secret: string) => createHmac('sha256', secret).update(`unsub:${leadId}`).digest('base64url').slice(0, 32);
+export const verifyUnsubscribe = (leadId: string, token: string, secret: string) => !!secret && safeEqual(token, unsubscribeToken(leadId, secret));

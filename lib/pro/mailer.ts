@@ -1,19 +1,12 @@
-// Envío del enlace de acceso por SMTP (Gmail con contraseña de aplicación). SMTP_USER, SMTP_PASS y, opcional, SMTP_HOST/SMTP_PORT.
-import nodemailer from 'nodemailer';
+// Enlace de acceso al Plan Pro.
+import { sendMail } from '@/lib/mail';
 import { SITE_URL } from '@/lib/site';
 
-export const mailerEnabled = () => !!(process.env.SMTP_USER && process.env.SMTP_PASS);
+export { mailerEnabled } from '@/lib/mail';
 
 export async function sendLoginLink(to: string, token: string) {
   const link = `${SITE_URL}/api/pro/verify?token=${encodeURIComponent(token)}`;
-  const transport = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: Number(process.env.SMTP_PORT || 465),
-    secure: Number(process.env.SMTP_PORT || 465) === 465,
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-  });
-  await transport.sendMail({
-    from: `"Agentics · Auditor SEO" <${process.env.SMTP_USER}>`,
+  await sendMail({
     to,
     subject: 'Tu enlace de acceso al Plan Pro',
     text: `Entra en tu cuenta Pro con este enlace (válido 20 minutos, un solo uso):\n${link}\n\nSi no lo has pedido, ignora este correo.`,
